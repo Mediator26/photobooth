@@ -6,535 +6,1568 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="theme-color" content="#111111">
+<meta name="theme-color" content="#0E0E10">
 <title>Photobooth</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;700;800&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg: #111;
-    --fg: #fff;
-    --accent: #ff3d6e;
-    --panel: rgba(0,0,0,.55);
+    --bg: #0E0E10;
+    --panel: #17171A;
+    --line: #222227;
+    --ctrl: #26262B;
+    --ctrl2: #1C1C20;
+    --fg: #F5F5F2;
+    --muted: #A3A3AB;
+    --soft: #C9C9CF;
+    --accent: #FFD23F;
+    --ink: #141414;
+    --paper: #FBFAF7;
+    --glass: rgba(14,14,16,.6);
+    --display: 'Bricolage Grotesque', system-ui, sans-serif;
+    --top: max(32px, env(safe-area-inset-top));
+    --bottom: max(32px, env(safe-area-inset-bottom));
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  [hidden] { display: none !important; }
   html, body {
     margin: 0; height: 100%; background: var(--bg); color: var(--fg);
-    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-    overflow: hidden; user-select: none; -webkit-user-select: none;
+    font-family: 'DM Sans', system-ui, sans-serif;
+    overflow: hidden; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
   }
-  #stage { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: #000; }
-  video { width: 100%; height: 100%; object-fit: cover; }
-  video.mirror { transform: scaleX(-1); }
-  video.f-bw { filter: grayscale(1) contrast(1.1); }
-  video.f-sepia { filter: sepia(.85) contrast(1.05); }
-  video.f-warm { filter: saturate(1.3) sepia(.2) brightness(1.05); }
+  button { font: inherit; color: inherit; cursor: pointer; border: 0; background: none; padding: 0; }
+  button:active { transform: scale(.97); }
+  input, select { font: inherit; }
+  svg { flex-shrink: 0; }
 
-  #countdown {
-    position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
-    font-size: min(40vw, 40vh); font-weight: 800; color: #fff;
-    text-shadow: 0 0 40px rgba(0,0,0,.6); pointer-events: none; opacity: 0;
-  }
-  #countdown.show { animation: pop 1s ease-out; }
-  @keyframes pop { 0% { opacity: 0; transform: scale(1.6); } 20% { opacity: 1; transform: scale(1); } 100% { opacity: 0; transform: scale(.8); } }
+  /* ---------- Caméra en direct ---------- */
+  #live { position: fixed; inset: 0; background: #000; }
+  #live video { width: 100%; height: 100%; object-fit: cover; display: block; }
+  #live video.mirror { transform: scaleX(-1); }
 
-  #progress {
-    position: fixed; top: 50%; left: 50%; transform: translate(-50%, calc(-50% - min(24vw, 24vh)));
-    background: var(--panel); padding: 8px 18px; border-radius: 999px; font-size: 20px; font-weight: 700;
-    pointer-events: none; display: none;
-  }
-  #progress.show { display: block; }
+  .screen { position: fixed; inset: 0; display: none; }
+  .screen.active { display: block; }
+  .screen.flex.active { display: flex; flex-direction: column; }
+  .screen.solid { background: var(--bg); }
 
-  #flash { position: fixed; inset: 0; background: #fff; opacity: 0; pointer-events: none; }
-  #flash.go { animation: flash .5s ease-out; }
-  @keyframes flash { 0% { opacity: 1; } 100% { opacity: 0; } }
+  .pill {
+    display: inline-flex; align-items: center; gap: 10px; padding: 10px 16px; border-radius: 999px;
+    background: var(--glass); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    font-size: 15px; font-weight: 600; white-space: nowrap; min-height: 44px;
+  }
+  .pill.event { font-family: var(--display); font-size: 17px; font-weight: 700; letter-spacing: .01em; padding: 10px 20px; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: #FF5A5A; box-shadow: 0 0 0 4px rgba(255,90,90,.25); flex-shrink: 0; }
+  .dot.ok { background: #4ADE80; box-shadow: 0 0 0 4px rgba(74,222,128,.18); }
+  .dot.off { background: #6B6B73; box-shadow: none; }
 
-  .bar {
-    position: fixed; left: 0; right: 0; display: flex; align-items: center; justify-content: center;
-    gap: 16px; padding: 16px; padding-left: max(16px, env(safe-area-inset-left)); padding-right: max(16px, env(safe-area-inset-right));
+  .hud-top {
+    position: absolute; top: var(--top); left: clamp(20px, 7vw, 96px); right: clamp(20px, 7vw, 96px);
+    display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
   }
-  #top { top: 0; padding-top: max(16px, env(safe-area-inset-top)); justify-content: space-between; flex-wrap: wrap; }
-  #top .right { display: flex; gap: 8px; }
-  #bottom { bottom: 0; padding-bottom: max(24px, env(safe-area-inset-bottom)); justify-content: space-around; }
-  body.busy .bar { opacity: 0; pointer-events: none; transition: opacity .2s; }
+  .hud-right { display: flex; gap: 10px; }
 
-  button {
-    font: inherit; color: var(--fg); background: var(--panel); border: 1px solid rgba(255,255,255,.2);
-    border-radius: 999px; padding: 12px 18px; font-size: 16px; cursor: pointer;
-    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
-  }
-  button:active { transform: scale(.96); }
-  button:disabled { opacity: .4; }
+  .corner { position: absolute; width: 48px; height: 48px; border: 3px solid rgba(245,245,242,.75); pointer-events: none; }
+  .corner.tl { top: 28px; left: 28px; border-right: 0; border-bottom: 0; border-top-left-radius: 14px; }
+  .corner.tr { top: 28px; right: 28px; border-left: 0; border-bottom: 0; border-top-right-radius: 14px; }
+  .corner.bl { bottom: 28px; left: 28px; border-right: 0; border-top: 0; border-bottom-left-radius: 14px; }
+  .corner.br { bottom: 28px; right: 28px; border-left: 0; border-top: 0; border-bottom-right-radius: 14px; }
 
-  #shutter {
-    width: 84px; height: 84px; padding: 0; border-radius: 50%;
-    background: #fff; border: 6px solid rgba(255,255,255,.4); background-clip: padding-box;
-    box-shadow: 0 0 0 3px #fff;
+  /* ---------- Accueil ---------- */
+  .dock {
+    position: absolute; left: 50%; bottom: max(44px, env(safe-area-inset-bottom)); transform: translateX(-50%);
+    display: flex; align-items: center; gap: 32px; padding: 20px 44px 20px 20px; border-radius: 120px;
+    background: rgba(14,14,16,.62); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+    border: 1px solid rgba(245,245,242,.12); width: max-content; max-width: calc(100vw - 32px); text-align: left;
   }
-  #shutter:active { background: var(--accent); }
+  .dock:active { transform: translateX(-50%) scale(.98); }
+  .shutter {
+    width: 148px; height: 148px; border-radius: 50%; background: var(--accent);
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    box-shadow: 0 0 0 10px rgba(245,245,242,.14), 0 16px 40px rgba(0,0,0,.35);
+  }
+  .dock-title { font-family: var(--display); font-size: 44px; font-weight: 800; line-height: 1; letter-spacing: -.01em; }
+  .dock-sub { font-size: 19px; color: var(--soft); margin-top: 8px; }
 
-  #thumb {
-    width: 64px; height: 64px; border-radius: 12px; padding: 0; overflow: hidden;
-    background: var(--panel) center/cover no-repeat;
+  /* ---------- Compte à rebours ---------- */
+  .tint { position: absolute; inset: 0; background: rgba(14,14,16,.28); }
+  .dashes { display: flex; gap: 6px; }
+  .dashes span { width: 24px; height: 6px; border-radius: 3px; background: rgba(245,245,242,.3); }
+  .dashes span.on { background: var(--accent); }
+  .progress-label { font-family: var(--display); font-size: 18px; font-weight: 700; }
+  .look {
+    position: absolute; left: 50%; top: calc(var(--top) + 72px); transform: translateX(-50%);
+    display: flex; align-items: center; gap: 10px; padding: 12px 22px; border-radius: 999px;
+    background: var(--accent); color: var(--ink); font-size: 18px; font-weight: 700; white-space: nowrap;
+  }
+  .ring {
+    position: absolute; left: 50%; top: 50%; width: min(56vmin, 460px); height: min(56vmin, 460px);
+    transform: translate(-50%, -48%); display: flex; align-items: center; justify-content: center; color: var(--accent);
+  }
+  .ring svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  #ringArc { transition: stroke-dashoffset .95s linear; }
+  .ring-num { position: relative; font-family: var(--display); font-weight: 800; font-size: min(36vmin, 300px); line-height: 1; letter-spacing: -.04em; }
+  .ring-num.pop { animation: pop .45s ease-out; }
+  @keyframes pop { from { transform: scale(1.3); opacity: .3; } to { transform: scale(1); opacity: 1; } }
+
+  .thumbs {
+    position: absolute; bottom: var(--bottom); left: 50%; transform: translateX(-50%);
+    display: flex; gap: 12px; padding: 12px; border-radius: 22px; background: var(--glass);
+    backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  }
+  .thumb {
+    width: 96px; height: 64px; border-radius: 12px; display: flex; align-items: center; justify-content: center;
+    font-weight: 600; font-size: 16px; color: var(--muted); border: 2px dashed rgba(245,245,242,.3); overflow: hidden;
+  }
+  .thumb.cur { border: 2px solid var(--accent); color: var(--fg); font-weight: 700; }
+  .thumb.done { border: 0; background: #3A302B; }
+  .thumb.done img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .thumb.last { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+  #flash { position: fixed; inset: 0; background: #fff; opacity: 0; pointer-events: none; z-index: 50; }
+  #flash.go { animation: flash .6s ease-out; }
+  @keyframes flash { 0% { opacity: .95; } 100% { opacity: 0; } }
+
+  /* ---------- Photo prise ---------- */
+  #s-shot { overflow: hidden; background: var(--bg); }
+  .shot-bg { position: absolute; inset: -40px; width: calc(100% + 80px); height: calc(100% + 80px); object-fit: cover; filter: blur(18px) brightness(.4); }
+  .shot-body { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 56px; padding: 120px 40px 140px; }
+  .polaroid {
+    padding: 14px 14px 18px; background: var(--paper); border-radius: 10px; transform: rotate(-3deg);
+    box-shadow: 0 30px 70px rgba(0,0,0,.5); animation: drop .5s cubic-bezier(.2,.9,.3,1.15);
+  }
+  .polaroid img { display: block; max-width: min(46vw, 540px); max-height: 52vh; border-radius: 4px; }
+  @keyframes drop { from { transform: rotate(-9deg) scale(1.15); opacity: 0; } to { transform: rotate(-3deg) scale(1); opacity: 1; } }
+  .shot-text { display: flex; flex-direction: column; gap: 18px; max-width: 340px; }
+  .check { width: 72px; height: 72px; border-radius: 50%; background: var(--accent); display: flex; align-items: center; justify-content: center; }
+  .shot-title { font-family: var(--display); font-size: 64px; font-weight: 800; line-height: .95; letter-spacing: -.02em; }
+  .shot-sub { font-size: 22px; color: var(--soft); line-height: 1.35; }
+  .next { display: flex; align-items: center; gap: 12px; margin-top: 6px; font-size: 17px; font-weight: 600; }
+  .bar { width: 120px; height: 6px; border-radius: 3px; background: rgba(245,245,242,.2); overflow: hidden; flex-shrink: 0; }
+  .bar > div { height: 100%; width: 0; background: var(--accent); }
+
+  /* ---------- Barre du haut (retouche, résultat) ---------- */
+  .topbar {
+    height: calc(84px + env(safe-area-inset-top)); padding: env(safe-area-inset-top) 40px 0; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: space-between; gap: 16px; border-bottom: 1px solid var(--line);
+  }
+  .btn-back { display: flex; align-items: center; gap: 8px; height: 44px; padding: 0 16px 0 10px; border-radius: 12px; font-size: 16px; font-weight: 600; background: var(--ctrl2); }
+  .stepper { display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 600; list-style: none; margin: 0; padding: 0; }
+  .step { display: flex; align-items: center; gap: 8px; color: var(--muted); }
+  .step .n { width: 26px; height: 26px; border-radius: 50%; border: 2px solid #34343A; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; }
+  .step.done .n { background: #2A2A30; border: 0; }
+  .step.cur { color: var(--fg); }
+  .step.cur .n { background: var(--accent); color: var(--ink); border: 0; }
+  .step-sep { width: 28px; height: 2px; background: #2A2A30; }
+  .topbar-right { font-size: 15px; color: var(--muted); min-width: 150px; text-align: right; }
+
+  /* ---------- Retouche ---------- */
+  .edit-body, .result-body { flex: 1; display: flex; min-height: 0; }
+  .edit-stage { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; padding: 24px; }
+  .paper-box { flex: 1; min-height: 0; width: 100%; display: flex; align-items: center; justify-content: center; }
+  .paper { position: relative; background: var(--paper); border-radius: 10px; box-shadow: 0 24px 60px rgba(0,0,0,.45); overflow: hidden; }
+  .paper canvas.base { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .slot { position: absolute; z-index: 1; touch-action: none; cursor: grab; }
+  .slot canvas { display: block; width: 100%; height: 100%; border-radius: 4px; background: #3A302B; }
+  .paper .overlay { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 2; pointer-events: none; }
+  .sel-frame { position: absolute; z-index: 3; pointer-events: none; outline: 4px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+  .sel-frame i { position: absolute; width: 14px; height: 14px; border-radius: 4px; background: var(--accent); }
+  .sel-frame i:nth-child(1) { top: 8px; left: 8px; }
+  .sel-frame i:nth-child(2) { top: 8px; right: 8px; }
+  .sel-frame i:nth-child(3) { bottom: 8px; left: 8px; }
+  .sel-frame i:nth-child(4) { bottom: 8px; right: 8px; }
+  .sel-hint {
+    position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); display: flex; align-items: center; gap: 6px;
+    padding: 6px 12px; border-radius: 999px; background: rgba(14,14,16,.72); color: var(--fg); font-size: 13px; font-weight: 600; white-space: nowrap;
+  }
+  .stage-note { font-size: 15px; color: var(--muted); text-align: center; }
+
+  .side-panel {
+    width: 380px; flex-shrink: 0; padding: 26px 32px max(28px, env(safe-area-inset-bottom)); background: var(--panel);
+    border-left: 1px solid var(--line); display: flex; flex-direction: column; gap: 20px; overflow-y: auto;
+  }
+  .panel-title { font-family: var(--display); font-size: 30px; font-weight: 800; letter-spacing: -.01em; margin: 0; }
+  .panel-sub { font-size: 16px; color: var(--muted); margin: 6px 0 0; }
+  .row-between { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .chip { padding: 6px 12px; border-radius: 999px; background: var(--ctrl); font-size: 14px; font-weight: 700; }
+  .btn-text { height: 40px; padding: 0 12px; border-radius: 10px; color: var(--soft); font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+  .label { display: flex; justify-content: space-between; font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  .label b { color: var(--fg); letter-spacing: 0; }
+  .group { display: flex; flex-direction: column; gap: 10px; }
+  .filter-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+  .fbtn { display: flex; flex-direction: column; gap: 6px; color: var(--muted); font-size: 13px; font-weight: 600; text-align: center; }
+  .fbtn img { display: block; width: 100%; height: 58px; object-fit: cover; border-radius: 10px; outline: 3px solid transparent; outline-offset: 2px; }
+  .fbtn.on { color: var(--fg); }
+  .fbtn.on img { outline-color: var(--accent); }
+  .range-row { display: flex; align-items: center; gap: 10px; }
+  .sq { width: 44px; height: 44px; flex-shrink: 0; border-radius: 12px; background: var(--ctrl); display: flex; align-items: center; justify-content: center; }
+  input[type=range] { flex: 1; min-width: 0; accent-color: var(--accent); height: 44px; }
+  .spacer { flex: 1; }
+  .btn-primary {
+    min-height: 64px; width: 100%; border-radius: 18px; background: var(--accent); color: var(--ink);
+    display: flex; align-items: center; justify-content: center; gap: 10px; padding: 0 20px;
+    font-family: var(--display); font-size: 21px; font-weight: 800;
+  }
+  .btn-primary:disabled { opacity: .5; }
+  .btn-secondary {
+    min-height: 56px; width: 100%; border-radius: 16px; background: var(--ctrl); color: var(--fg);
+    display: flex; align-items: center; justify-content: center; gap: 10px; padding: 0 18px; font-size: 17px; font-weight: 600;
   }
 
-  .chips { display: flex; gap: 8px; flex-wrap: wrap; }
-  .chips button { padding: 8px 14px; font-size: 14px; }
-  .chips button.on { background: var(--accent); border-color: var(--accent); }
+  /* ---------- Résultat ---------- */
+  .result-stage { flex: 1; min-width: 0; display: flex; align-items: center; justify-content: center; padding: 32px; position: relative; }
+  .montage-img { display: block; max-width: 100%; max-height: 100%; border-radius: 10px; box-shadow: 0 24px 60px rgba(0,0,0,.45); background: var(--paper); }
+  .montage-img:not([src]) { display: none; }
+  .btn-secondary:disabled { opacity: .5; }
+  .result-wait { position: absolute; font-size: 18px; color: var(--muted); }
+  .result-title { font-family: var(--display); font-size: 64px; font-weight: 800; line-height: .95; letter-spacing: -.02em; margin: 0; }
+  .result-sub { font-size: 19px; color: var(--soft); line-height: 1.4; margin: 10px 0 0; }
+  .hint { font-size: 14px; color: var(--muted); line-height: 1.45; margin: 0; }
+  .autoback { display: flex; flex-direction: column; gap: 8px; font-size: 15px; color: var(--muted); }
+  .autoback .bar { width: 100%; }
 
-  /* Écran de prévisualisation après la prise */
-  #review {
-    position: fixed; inset: 0; background: rgba(0,0,0,.92); display: none;
-    flex-direction: column; align-items: center; justify-content: center; gap: 20px; padding: 24px;
-  }
-  #review.open { display: flex; }
-  #review img { max-width: 100%; max-height: 72vh; border-radius: 8px; box-shadow: 0 10px 40px rgba(0,0,0,.6); }
-  #review .actions { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
-  #save { background: var(--accent); border-color: var(--accent); font-weight: 700; font-size: 18px; padding: 14px 28px; }
-  #hint { font-size: 14px; opacity: .7; text-align: center; max-width: 480px; }
+  /* ---------- Écran de démarrage ---------- */
+  #s-start.active { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px; padding: 24px; text-align: center; }
+  .start-title { font-family: var(--display); font-size: clamp(44px, 8vw, 72px); font-weight: 800; letter-spacing: -.02em; margin: 0; }
+  .start-sub { font-size: 19px; color: var(--soft); margin: 0; max-width: 520px; }
+  .start-btn { min-height: 72px; padding: 0 36px; border-radius: 999px; background: var(--accent); color: var(--ink); font-family: var(--display); font-size: 22px; font-weight: 800; display: flex; align-items: center; gap: 12px; }
+  .start-err { color: #FF8A8A; max-width: 520px; margin: 0; }
 
-  /* Réglages */
-  #settings {
-    position: fixed; inset: 0; background: rgba(0,0,0,.8); display: none;
-    align-items: center; justify-content: center; padding: 16px;
+  /* ---------- Réglages ---------- */
+  #s-settings { overflow-y: auto; -webkit-overflow-scrolling: touch; -webkit-user-select: none; }
+  .settings-wrap { max-width: 640px; margin: 0 auto; padding: max(28px, env(safe-area-inset-top)) 20px max(40px, env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 20px; }
+  .settings-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
+  .eyebrow { font-size: 13px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  .settings-head h1 { font-family: var(--display); font-size: 40px; font-weight: 800; letter-spacing: -.01em; margin: 4px 0 0; }
+  .status { display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 999px; background: var(--ctrl); font-size: 14px; font-weight: 700; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 20px; padding: 20px; display: flex; flex-direction: column; gap: 16px; }
+  .card h2 { font-family: var(--display); font-size: 22px; font-weight: 700; margin: 0; }
+  .srow { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; flex-wrap: wrap; }
+  .status-list .srow + .srow { border-top: 1px solid var(--line); padding-top: 12px; }
+  .srow .k { font-size: 16px; font-weight: 600; }
+  .srow .v { display: inline-flex; align-items: center; gap: 8px; font-size: 15px; color: var(--soft); }
+  .seg { display: flex; flex-wrap: wrap; gap: 4px; padding: 4px; border-radius: 12px; background: var(--bg); }
+  .seg button { min-width: 44px; height: 40px; padding: 0 14px; border-radius: 9px; font-size: 15px; font-weight: 600; color: var(--soft); }
+  .seg button.on { background: var(--accent); color: var(--ink); }
+  .swatches { display: flex; gap: 10px; }
+  .swatches button { width: 44px; height: 44px; border-radius: 50%; border: 3px solid transparent; box-shadow: inset 0 0 0 3px var(--panel); }
+  .swatches button.on { border-color: var(--fg); }
+  .field { display: flex; flex-direction: column; gap: 8px; }
+  .field label { font-size: 14px; font-weight: 600; color: var(--soft); }
+  .text {
+    height: 52px; padding: 0 16px; border-radius: 14px; border: 1px solid #2E2E34; background: var(--bg); color: var(--fg);
+    font-size: 18px; -webkit-user-select: text; user-select: text; width: 100%;
   }
-  #settings.open { display: flex; }
-  #settings .card {
-    background: #1d1d1f; border-radius: 20px; padding: 24px; width: 100%; max-width: 440px;
-    display: flex; flex-direction: column; gap: 18px;
-  }
-  #settings h2 { margin: 0; font-size: 22px; }
-  #settings label { display: flex; flex-direction: column; gap: 8px; font-size: 14px; opacity: .9; }
-  #settings label.row { flex-direction: row; align-items: center; gap: 10px; font-size: 16px; }
-  #settings input[type=text] {
-    font: inherit; font-size: 18px; padding: 12px 14px; border-radius: 12px;
-    border: 1px solid rgba(255,255,255,.2); background: #000; color: #fff;
-    user-select: text; -webkit-user-select: text;
-  }
-  #settings input[type=checkbox] { width: 22px; height: 22px; accent-color: var(--accent); }
-  #settings .close { background: var(--accent); border-color: var(--accent); font-weight: 700; align-self: flex-end; }
+  .text:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .switch { appearance: none; -webkit-appearance: none; width: 52px; height: 32px; border-radius: 16px; background: #34343A; position: relative; cursor: pointer; flex-shrink: 0; margin: 0; transition: background .15s; }
+  .switch::before { content: ''; position: absolute; top: 3px; left: 3px; width: 26px; height: 26px; border-radius: 50%; background: var(--fg); transition: transform .15s; }
+  .switch:checked { background: var(--accent); }
+  .switch:checked::before { transform: translateX(20px); background: var(--ink); }
+  .preview-box { background: var(--bg); border-radius: 14px; padding: 16px; display: flex; justify-content: center; }
+  .preview-box canvas { display: block; max-width: 100%; height: auto; border-radius: 6px; box-shadow: 0 10px 30px rgba(0,0,0,.4); }
+  .file-row { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 14px; background: var(--ctrl2); text-align: left; width: 100%; }
+  .file-row .ico { width: 44px; height: 44px; border-radius: 12px; background: var(--ctrl); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .file-row .meta { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .file-row .meta b { font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .file-row .meta span { font-size: 13px; color: var(--muted); }
+  button.file-row { border: 2px dashed #34343A; background: transparent; }
+  .note { font-size: 14px; color: var(--muted); line-height: 1.45; margin: 0; }
+  .link { color: var(--accent); font-weight: 600; text-decoration: underline; font-size: 14px; text-align: left; }
 
-  #start {
-    position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
-    gap: 20px; background: var(--bg); text-align: center; padding: 24px;
+  /* ---------- Fenêtre du code ---------- */
+  .modal { position: fixed; inset: 0; background: rgba(0,0,0,.72); display: none; align-items: center; justify-content: center; padding: 16px; z-index: 60; }
+  .modal.open { display: flex; }
+  .modal-card { background: var(--panel); border: 1px solid var(--line); border-radius: 20px; padding: 24px; width: 100%; max-width: 360px; display: flex; flex-direction: column; gap: 14px; }
+  .modal-card h2 { font-family: var(--display); font-size: 24px; margin: 0; }
+  .modal-actions { display: flex; gap: 10px; }
+  .modal-actions > * { flex: 1; min-height: 52px; font-size: 17px; }
+
+  /* ---------- iPad vertical et petits écrans ---------- */
+  @media (orientation: portrait), (max-width: 900px) {
+    .shot-body { flex-direction: column; gap: 36px; padding: 110px 24px 130px; }
+    .polaroid img { max-width: min(76vw, 620px); max-height: 42vh; }
+    .shot-text { align-items: center; text-align: center; max-width: 560px; }
+    .screen.flex { overflow-y: auto; overflow-x: hidden; }
+    .stepper .lbl { display: none; }
+    .topbar { padding-left: 20px; padding-right: 20px; }
+    .topbar-right { min-width: 0; }
+    .edit-body, .result-body { flex-direction: column; flex: none; }
+    .edit-stage, .result-stage { height: 56vh; flex: none; }
+    .side-panel { width: auto; border-left: 0; border-top: 1px solid var(--line); overflow: visible; }
+    .filter-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
   }
-  #start h1 { font-size: 48px; margin: 0; }
-  #start button { background: var(--accent); border-color: var(--accent); font-size: 20px; padding: 16px 32px; font-weight: 700; }
-  #error { color: #ff8080; max-width: 480px; }
+  @media (max-width: 760px) {
+    .stepper .lbl { display: none; }
+    .topbar { padding-left: 16px; padding-right: 16px; }
+    .topbar-right { min-width: 0; }
+    .dock { gap: 18px; padding: 14px 26px 14px 14px; }
+    .shutter { width: 96px; height: 96px; }
+    .shutter svg { width: 40px; height: 40px; }
+    .dock-title { font-size: 26px; }
+    .dock-sub { font-size: 15px; }
+    .look { font-size: 15px; padding: 10px 16px; }
+    .thumb { width: 64px; height: 44px; }
+    .shot-title, .result-title { font-size: 44px; }
+    .shot-sub { font-size: 18px; }
+    .filter-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .corner { display: none; }
+  }
 </style>
 </head>
 <body>
 
-<div id="stage"><video id="video" autoplay playsinline muted></video></div>
-<div id="countdown"></div>
-<div id="progress"></div>
-<div id="flash"></div>
+<div id="live"><video id="video" autoplay playsinline muted></video></div>
 
-<div id="top" class="bar">
-  <div class="chips" id="filters">
-    <button data-f="none" class="on">Normal</button>
-    <button data-f="bw">N&amp;B</button>
-    <button data-f="sepia">Sépia</button>
-    <button data-f="warm">Chaud</button>
-  </div>
-  <div class="right">
-    <div class="chips" id="modes">
-      <button data-m="strip" class="on">3 photos</button>
-      <button data-m="single">1 photo</button>
-    </div>
-    <button id="timer" title="Minuteur">⏱ 3 s</button>
-    <button id="openSettings" title="Réglages">⚙️</button>
-  </div>
-</div>
+<!-- Démarrage : demande l'accès à la caméra -->
+<section id="s-start" class="screen solid">
+  <svg aria-hidden="true" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/></svg>
+  <h1 class="start-title" id="startTitle">Photobooth</h1>
+  <p class="start-sub">Touchez le bouton pour activer la caméra et passer en plein écran.</p>
+  <button type="button" class="start-btn" id="startBtn">Activer la caméra</button>
+  <p class="start-err" id="startErr"></p>
+  <button type="button" class="link" id="startSettings">Réglages</button>
+</section>
 
-<div id="bottom" class="bar">
-  <button id="thumb" title="Dernière photo" disabled></button>
-  <button id="shutter" title="Prendre une photo" aria-label="Prendre une photo"></button>
-  <button id="flip" title="Changer de caméra">🔄</button>
-</div>
-
-<div id="review">
-  <img id="shot" alt="Photo prise">
-  <div class="actions">
-    <button id="save">💾 Enregistrer</button>
-    <button id="retake">↩︎ Reprendre</button>
-  </div>
-  <div id="hint"></div>
-</div>
-
-<div id="settings">
-  <div class="card">
-    <h2>Réglages</h2>
-    <label>Texte sur les photos (nom de l'événement…)
-      <input type="text" id="caption" maxlength="40" placeholder="Ex. : Halloween 2026">
-    </label>
-    <label class="row"><input type="checkbox" id="withDate" checked> Ajouter la date</label>
-    <label>Cadre
-      <div class="chips" id="frames">
-        <button data-c="none">Aucun</button>
-        <button data-c="#ffffff" class="on">Blanc</button>
-        <button data-c="#111111">Noir</button>
-        <button data-c="#ff3d6e">Rose</button>
-        <button data-c="#f39c12">Orange</button>
+<!-- 1 · Accueil -->
+<section id="s-home" class="screen">
+  <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
+  <div class="hud-top">
+    <div class="pill"><span class="dot"></span><span>En direct</span></div>
+    <div class="pill event" id="homeEvent"></div>
+    <div class="hud-right">
+      <div class="pill">
+        <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#F5F5F2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/></svg>
+        <span id="homeCount">3 photos</span>
       </div>
-    </label>
-    <button class="close" id="closeSettings">OK</button>
+      <button type="button" class="pill" id="openSettings" aria-label="Réglages">
+        <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#F5F5F2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      </button>
+    </div>
+  </div>
+  <button type="button" class="dock" id="startSession" aria-label="Commencer la séance photo">
+    <span class="shutter">
+      <svg aria-hidden="true" width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="#141414" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/></svg>
+    </span>
+    <span>
+      <span class="dock-title" style="display:block">Touchez pour commencer</span>
+      <span class="dock-sub" style="display:block" id="homeSub"></span>
+    </span>
+  </button>
+</section>
+
+<!-- 2 · Compte à rebours -->
+<section id="s-count" class="screen">
+  <div class="tint"></div>
+  <div class="hud-top">
+    <div class="pill"><span class="dot"></span><span>Séance en cours</span></div>
+    <div class="pill"><span class="progress-label" id="countLabel">Photo 1 sur 3</span><div class="dashes" id="countDashes"></div></div>
+    <button type="button" class="pill cancel">
+      <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#F5F5F2" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      <span>Annuler</span>
+    </button>
+  </div>
+  <div class="look">
+    <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#141414" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+    <span>Regardez l'appareil photo</span>
+  </div>
+  <div class="ring" role="timer" aria-live="assertive">
+    <svg aria-hidden="true" viewBox="0 0 460 460">
+      <circle cx="230" cy="230" r="214" fill="rgba(14,14,16,0.42)" stroke="rgba(245,245,242,0.18)" stroke-width="10"/>
+      <circle id="ringArc" cx="230" cy="230" r="214" fill="none" stroke="var(--accent)" stroke-width="10" stroke-linecap="round" stroke-dasharray="1345" stroke-dashoffset="0" transform="rotate(-90 230 230)"/>
+    </svg>
+    <span class="ring-num" id="countNum">3</span>
+  </div>
+  <div class="thumbs" id="countThumbs"></div>
+</section>
+
+<!-- 3 · Photo prise -->
+<section id="s-shot" class="screen">
+  <img class="shot-bg" id="shotBg" alt="">
+  <div class="hud-top">
+    <div class="pill"><span class="dot"></span><span>Séance en cours</span></div>
+    <div class="pill"><span class="progress-label" id="shotLabel">Photo 1 sur 3</span><div class="dashes" id="shotDashes"></div></div>
+    <button type="button" class="pill cancel">
+      <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#F5F5F2" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      <span>Annuler</span>
+    </button>
+  </div>
+  <div class="shot-body">
+    <div class="polaroid" id="polaroid"><img id="shotImg" alt="La photo qui vient d'être prise"></div>
+    <div class="shot-text">
+      <div class="check" aria-hidden="true"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#141414" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
+      <div class="shot-title" id="shotTitle">Superbe !</div>
+      <div class="shot-sub" id="shotSub"></div>
+      <div class="next" id="shotNext">
+        <div class="bar" aria-hidden="true"><div id="shotBar"></div></div>
+        <span id="shotNextTxt"></span>
+      </div>
+    </div>
+  </div>
+  <div class="thumbs" id="shotThumbs"></div>
+</section>
+
+<!-- 4 · Retouche -->
+<section id="s-edit" class="screen solid flex">
+  <header class="topbar">
+    <button type="button" class="btn-back" id="restart">
+      <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#F5F5F2" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>
+      <span>Recommencer</span>
+    </button>
+    <ol class="stepper">
+      <li class="step done"><span class="n"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#F5F5F2" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><span class="lbl">Photos</span></li>
+      <li class="step-sep" aria-hidden="true"></li>
+      <li class="step cur"><span class="n">2</span><span class="lbl">Retouche</span></li>
+      <li class="step-sep" aria-hidden="true"></li>
+      <li class="step"><span class="n">3</span><span class="lbl">Récupérer</span></li>
+    </ol>
+    <div class="topbar-right" id="autoVal"></div>
+  </header>
+  <div class="edit-body">
+    <div class="edit-stage">
+      <div class="paper-box" id="paperBox"><div class="paper" id="paper"></div></div>
+      <div class="stage-note">Les originaux sont conservés : chaque retouche reste réversible.</div>
+    </div>
+    <aside class="side-panel">
+      <div>
+        <h2 class="panel-title">Retouchez vos photos</h2>
+        <p class="panel-sub">Touchez une photo, puis ajustez-la.</p>
+      </div>
+      <div class="row-between">
+        <span class="chip" id="selLabel">Photo 1 sur 3</span>
+        <button type="button" class="btn-text" id="resetEdit">
+          <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#C9C9CF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 1 0 2.4-5.7M4 4v4.5h4.5"/></svg>
+          Réinitialiser
+        </button>
+      </div>
+      <div class="group">
+        <div class="label">Filtre</div>
+        <div class="filter-grid" id="filterGrid"></div>
+      </div>
+      <div class="group">
+        <label class="label" for="zoom"><span>Zoom</span><b id="zoomTxt">100 %</b></label>
+        <div class="range-row">
+          <button type="button" class="sq" id="zoomOut" aria-label="Dézoomer"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#F5F5F2" stroke-width="2.4" stroke-linecap="round"><path d="M5 12h14"/></svg></button>
+          <input id="zoom" type="range" min="100" max="200" step="5" value="100">
+          <button type="button" class="sq" id="zoomIn" aria-label="Zoomer"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#F5F5F2" stroke-width="2.4" stroke-linecap="round"><path d="M5 12h14M12 5v14"/></svg></button>
+        </div>
+      </div>
+      <div class="group">
+        <label class="label" for="rot"><span>Rotation</span><b id="rotTxt">0°</b></label>
+        <div class="range-row">
+          <button type="button" class="sq" id="rotLeft" aria-label="Tourner à gauche"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#F5F5F2" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 1 0 2.4-5.7M4 4v4.5h4.5"/></svg></button>
+          <input id="rot" type="range" min="-20" max="20" step="1" value="0">
+          <button type="button" class="sq" id="rotRight" aria-label="Tourner à droite"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#F5F5F2" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.4-5.7M20 4v4.5h-4.5"/></svg></button>
+        </div>
+      </div>
+      <div class="spacer"></div>
+      <button type="button" class="btn-primary" id="validate">
+        <span>Valider les 3 photos</span>
+        <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#141414" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+      </button>
+    </aside>
+  </div>
+</section>
+
+<!-- 5 · Résultat -->
+<section id="s-result" class="screen solid flex">
+  <header class="topbar">
+    <button type="button" class="btn-back" id="backEdit">
+      <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#F5F5F2" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>
+      <span>Retoucher</span>
+    </button>
+    <ol class="stepper">
+      <li class="step done"><span class="n"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#F5F5F2" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><span class="lbl">Photos</span></li>
+      <li class="step-sep" aria-hidden="true"></li>
+      <li class="step done"><span class="n"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#F5F5F2" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><span class="lbl">Retouche</span></li>
+      <li class="step-sep" aria-hidden="true"></li>
+      <li class="step cur"><span class="n">3</span><span class="lbl">Récupérer</span></li>
+    </ol>
+    <div class="topbar-right"></div>
+  </header>
+  <div class="result-body">
+    <div class="result-stage">
+      <img class="montage-img" id="montage" alt="Le montage de la séance">
+      <div class="result-wait" id="resultWait">Préparation du montage…</div>
+    </div>
+    <aside class="side-panel">
+      <div>
+        <h2 class="result-title">Et voilà !</h2>
+        <p class="result-sub" id="resultSub"></p>
+      </div>
+      <button type="button" class="btn-primary" id="saveMontage" disabled>
+        <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#141414" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>
+        <span>Enregistrer le montage</span>
+      </button>
+      <button type="button" class="btn-secondary" id="savePhotos" disabled>Enregistrer les photos séparées</button>
+      <p class="hint" id="saveHint"></p>
+      <div class="spacer"></div>
+      <button type="button" class="btn-secondary" id="finish">Terminer</button>
+      <div class="autoback" id="autoBack">
+        <span id="autoBackTxt"></span>
+        <div class="bar" aria-hidden="true"><div id="autoBackBar"></div></div>
+      </div>
+    </aside>
+  </div>
+</section>
+
+<!-- Réglages (remplace le panneau Admin et l'écran Événement) -->
+<section id="s-settings" class="screen solid">
+  <div class="settings-wrap">
+    <header class="settings-head">
+      <div>
+        <span class="eyebrow">Réglages</span>
+        <h1>Photobooth</h1>
+      </div>
+      <span class="status"><span class="dot ok" id="stDot"></span><span id="stText">Prêt</span></span>
+    </header>
+
+    <div class="card status-list">
+      <div class="srow"><span class="k">Caméra</span><span class="v"><span class="dot ok" id="camDot"></span><span id="camTxt">OK</span></span></div>
+      <div class="srow"><span class="k">Enregistrement</span><span class="v"><span class="dot ok"></span>Sur cet appareil</span></div>
+      <div class="srow"><span class="k">Envoi vers le site (QR code)</span><span class="v"><span class="dot off"></span>Pas encore disponible</span></div>
+      <div class="srow"><span class="k">Imprimante</span><span class="v"><span class="dot off"></span>Pas encore disponible</span></div>
+    </div>
+
+    <div class="card">
+      <h2>Séance</h2>
+      <div class="srow"><span class="k">Photos par séance</span>
+        <div class="seg" data-key="shots" role="group" aria-label="Photos par séance"><button type="button" data-v="1">1</button><button type="button" data-v="2">2</button><button type="button" data-v="3">3</button><button type="button" data-v="4">4</button></div>
+      </div>
+      <div class="srow"><span class="k">Compte à rebours</span>
+        <div class="seg" data-key="timer" role="group" aria-label="Compte à rebours"><button type="button" data-v="3">3 s</button><button type="button" data-v="5">5 s</button><button type="button" data-v="10">10 s</button></div>
+      </div>
+      <div class="srow"><span class="k">Pause entre les photos</span>
+        <div class="seg" data-key="pause" role="group" aria-label="Pause entre les photos"><button type="button" data-v="2">2 s</button><button type="button" data-v="3">3 s</button><button type="button" data-v="5">5 s</button></div>
+      </div>
+      <div class="srow"><span class="k">Caméra</span>
+        <div class="seg" data-key="facing" role="group" aria-label="Caméra"><button type="button" data-v="user">Avant</button><button type="button" data-v="environment">Arrière</button></div>
+      </div>
+      <label class="srow"><span class="k">Effet miroir (caméra avant)</span><input type="checkbox" class="switch" data-key="mirror"></label>
+      <label class="srow"><span class="k">Étape de retouche</span><input type="checkbox" class="switch" data-key="retouch"></label>
+    </div>
+
+    <div class="card">
+      <h2>Événement</h2>
+      <div class="field">
+        <label for="evName">Nom affiché (montage et écran d'accueil)</label>
+        <input id="evName" class="text" type="text" maxlength="40" placeholder="Ex. : Halloween 2026" autocomplete="off">
+      </div>
+      <label class="srow"><span class="k">Afficher la date</span><input type="checkbox" class="switch" data-key="showDate"></label>
+      <div class="srow"><span class="k">Gabarit du montage</span>
+        <div class="seg" data-key="layout" role="group" aria-label="Gabarit du montage"><button type="button" data-v="grille">Grille</button><button type="button" data-v="bande">Bande</button></div>
+      </div>
+      <div class="group">
+        <div class="label">Aperçu du montage</div>
+        <div class="preview-box"><canvas id="previewCanvas" aria-label="Aperçu du montage"></canvas></div>
+      </div>
+      <div id="overlayHas" class="file-row">
+        <span class="ico" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#F5F5F2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="2"/><path d="M21 15l-5-5L5 21"/></svg></span>
+        <span class="meta"><b id="overlayName"></b><span id="overlaySpecHas"></span></span>
+        <button type="button" class="sq" id="overlayRemove" aria-label="Retirer l'overlay"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#F5F5F2" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button>
+      </div>
+      <button type="button" id="overlayAdd" class="file-row">
+        <span class="ico" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#F5F5F2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M7 9l5-5 5 5M5 20h14"/></svg></span>
+        <span class="meta"><b>Importer un overlay pour ce gabarit</b><span id="overlaySpecAdd"></span></span>
+      </button>
+      <input type="file" id="overlayFile" accept="image/png" hidden>
+      <p class="note">PNG transparent, posé par-dessus les photos : les emplacements des photos doivent rester transparents. Avec un overlay, le nom et la date ne sont plus écrits automatiquement en bas du montage.</p>
+      <button type="button" class="link" id="templateDl">Télécharger le modèle vide de ce gabarit</button>
+    </div>
+
+    <div class="card">
+      <h2>Écran</h2>
+      <div class="srow"><span class="k">Couleur d'accent</span>
+        <div class="seg swatches" data-key="accent" role="group" aria-label="Couleur d'accent" style="background:none;padding:0">
+          <button type="button" data-v="#FFD23F" style="background:#FFD23F" aria-label="Jaune"></button>
+          <button type="button" data-v="#FF7A59" style="background:#FF7A59" aria-label="Corail"></button>
+          <button type="button" data-v="#7CC4FF" style="background:#7CC4FF" aria-label="Bleu"></button>
+          <button type="button" data-v="#B7F171" style="background:#B7F171" aria-label="Vert"></button>
+        </div>
+      </div>
+      <div class="srow"><span class="k">Validation auto de la retouche</span>
+        <div class="seg" data-key="editTimeout" role="group" aria-label="Validation automatique de la retouche"><button type="button" data-v="0">Non</button><button type="button" data-v="60">1 min</button><button type="button" data-v="90">1:30</button><button type="button" data-v="120">2 min</button></div>
+      </div>
+      <div class="srow"><span class="k">Retour à l'accueil après le résultat</span>
+        <div class="seg" data-key="resultTimeout" role="group" aria-label="Retour automatique à l'accueil"><button type="button" data-v="30">30 s</button><button type="button" data-v="60">1 min</button><button type="button" data-v="120">2 min</button></div>
+      </div>
+      <div class="field">
+        <label for="pinField">Code pour ouvrir les réglages (laisser vide pour aucun)</label>
+        <input id="pinField" class="text" type="text" inputmode="numeric" maxlength="6" placeholder="Ex. : 2026" autocomplete="off">
+      </div>
+    </div>
+
+    <button type="button" class="btn-primary" id="closeSettings">Terminé</button>
+  </div>
+</section>
+
+<div class="modal" id="pinModal" role="dialog" aria-modal="true" aria-labelledby="pinTitle">
+  <div class="modal-card">
+    <h2 id="pinTitle">Code des réglages</h2>
+    <input id="pinInput" class="text" type="password" inputmode="numeric" maxlength="6" autocomplete="off" aria-label="Code">
+    <p class="note" id="pinErr"></p>
+    <div class="modal-actions">
+      <button type="button" class="btn-secondary" id="pinCancel">Annuler</button>
+      <button type="button" class="btn-primary" id="pinOk">Ouvrir</button>
+    </div>
   </div>
 </div>
 
-<div id="start">
-  <h1>📸 Photobooth</h1>
-  <p>Touchez le bouton pour activer la caméra.</p>
-  <button id="go">Commencer</button>
-  <p id="error"></p>
-</div>
+<div id="flash"></div>
 
 <script>
 const $ = s => document.querySelector(s);
-const video = $('#video');
-let stream = null;
-let facing = 'user';          // 'user' = caméra avant, 'environment' = arrière
-let filter = 'none';
-let mode = 'strip';           // 'single' ou 'strip'
-const SHOTS = 3;           // nombre de photos par séance
-let timerSec = 3;
-let busy = false;
-let lastBlob = null, lastUrl = null;
-
-// Réglages mémorisés sur l'appareil
-const settings = { caption: '', withDate: true, frame: '#ffffff' };
-try { Object.assign(settings, JSON.parse(localStorage.getItem('photobooth') || '{}')); } catch (e) {}
-function saveSettings() { try { localStorage.setItem('photobooth', JSON.stringify(settings)); } catch (e) {} }
-
+const $$ = s => document.querySelectorAll(s);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
               (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const DISPLAY = '"Bricolage Grotesque", system-ui, sans-serif';
+const BODY = '"DM Sans", system-ui, sans-serif';
+
+// ---------- Réglages (mémorisés sur l'appareil) ----------
+const DEFAULTS = {
+  shots: 3, timer: 3, pause: 3, facing: 'user', mirror: true, retouch: true,
+  eventName: '', showDate: true, layout: 'grille', accent: '#FFD23F',
+  editTimeout: 90, resultTimeout: 60, pin: ''
+};
+const S = Object.assign({}, DEFAULTS);
+try {
+  // Reprend le texte de l'ancienne version du site
+  const old = JSON.parse(localStorage.getItem('photobooth') || 'null');
+  if (old?.caption) S.eventName = old.caption;
+  if (typeof old?.withDate === 'boolean') S.showDate = old.withDate;
+} catch (e) {}
+try { Object.assign(S, JSON.parse(localStorage.getItem('photobooth-v2') || '{}')); } catch (e) {}
+function saveSettings() { try { localStorage.setItem('photobooth-v2', JSON.stringify(S)); } catch (e) {} }
+
+// Petit stockage local pour les overlays (trop lourds pour localStorage)
+const idb = (() => {
+  let dbp;
+  const open = () => dbp ||= new Promise((res, rej) => {
+    const r = indexedDB.open('photobooth', 1);
+    r.onupgradeneeded = () => r.result.createObjectStore('files');
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error);
+  });
+  const run = async (mode, fn) => {
+    const db = await open();
+    return new Promise((res, rej) => {
+      const t = db.transaction('files', mode);
+      const req = fn(t.objectStore('files'));
+      t.oncomplete = () => res(req.result);
+      t.onerror = () => rej(t.error);
+    });
+  };
+  return {
+    get: k => run('readonly', s => s.get(k)),
+    set: (k, v) => run('readwrite', s => s.put(v, k)),
+    del: k => run('readwrite', s => s.delete(k))
+  };
+})();
+
+const overlays = {};   // 'grille' | 'bande' -> { img, url, name }
+async function toOverlay(rec) {
+  const url = URL.createObjectURL(rec.blob);
+  const img = new Image();
+  await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = url; });
+  return { img, url, name: rec.name };
+}
+async function loadOverlays() {
+  for (const k of ['grille', 'bande']) {
+    try {
+      const rec = await idb.get('overlay-' + k);
+      if (rec) overlays[k] = await toOverlay(rec);
+    } catch (e) {}
+  }
+}
+
+const overlaysReady = loadOverlays();
+const fontsReady = Promise.all([
+  document.fonts.load('800 50px "Bricolage Grotesque"'),
+  document.fonts.load('700 50px "Bricolage Grotesque"'),
+  document.fonts.load('500 40px "DM Sans"')
+]).catch(() => {});
+
+// ---------- Écrans ----------
+let screen = null;
+function show(name) {
+  screen = name;
+  $$('.screen').forEach(s => s.classList.toggle('active', s.id === 's-' + name));
+  stopAuto();
+}
+
+function applyAccent() { document.documentElement.style.setProperty('--accent', S.accent); }
+
+function refreshHome() {
+  const n = S.shots;
+  $('#homeCount').textContent = n > 1 ? `${n} photos` : '1 photo';
+  $('#homeSub').textContent = n > 1
+    ? `${n} photos, ${S.timer} secondes avant chacune. Regardez l'appareil photo.`
+    : `1 photo, ${S.timer} secondes avant. Regardez l'appareil photo.`;
+  $('#homeEvent').textContent = S.eventName;
+  $('#homeEvent').hidden = !S.eventName.trim();
+  $('#startTitle').textContent = S.eventName.trim() || 'Photobooth';
+}
+
+// ---------- Caméra ----------
+const video = $('#video');
+let stream = null;
 
 async function startCamera() {
   if (stream) stream.getTracks().forEach(t => t.stop());
   stream = await navigator.mediaDevices.getUserMedia({
-    video: { facingMode: facing, width: { ideal: 1920 }, height: { ideal: 1080 } },
+    video: { facingMode: S.facing, width: { ideal: 1920 }, height: { ideal: 1080 } },
     audio: false
   });
   video.srcObject = stream;
   await video.play();
-  video.classList.toggle('mirror', facing === 'user');
+  updateMirror();
 }
+function updateMirror() { video.classList.toggle('mirror', S.facing === 'user' && S.mirror); }
 
 async function launch() {
   await startCamera();
-  $('#start')?.remove();
+  show('home');
   keepAwake();
 }
 
-$('#go').onclick = async () => {
-  $('#error').textContent = '';
+$('#startBtn').onclick = async () => {
+  $('#startErr').textContent = '';
   if (!navigator.mediaDevices?.getUserMedia) {
-    $('#error').textContent = "Ce navigateur ne donne pas accès à la caméra. La page doit être ouverte en HTTPS (GitHub Pages) dans Safari ou Chrome.";
+    $('#startErr').textContent = "Ce navigateur ne donne pas accès à la caméra. Ouvrez la page en HTTPS dans Safari ou Chrome.";
     return;
   }
   try {
+    const el = document.documentElement;
+    (el.requestFullscreen || el.webkitRequestFullscreen)?.call(el)?.catch?.(() => {});
+  } catch (e) {}
+  try {
     await launch();
   } catch (e) {
-    $('#error').textContent = "Impossible d'accéder à la caméra : " + (e.message || e.name) +
+    $('#startErr').textContent = "Impossible d'accéder à la caméra : " + (e.message || e.name) +
       ". Vérifiez l'autorisation caméra dans les réglages du navigateur.";
   }
 };
 
-// Si la caméra est déjà autorisée pour ce site, on saute l'écran d'accueil.
-(async () => {
-  try {
-    const perm = await navigator.permissions?.query({ name: 'camera' });
-    if (perm?.state === 'granted') await launch();
-  } catch (e) {}
-})();
-
-$('#flip').onclick = async () => {
-  facing = facing === 'user' ? 'environment' : 'user';
-  try { await startCamera(); } catch (e) { facing = facing === 'user' ? 'environment' : 'user'; }
-};
-
-function selectChip(group, btn) {
-  group.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === btn));
+// Empêche l'écran de se mettre en veille, et relance la caméra au retour sur la page
+let wakeLock = null;
+async function keepAwake() {
+  try { wakeLock = await navigator.wakeLock?.request('screen'); } catch (e) {}
 }
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible') return;
+  keepAwake();
+  if (stream && !stream.active) startCamera().catch(() => {});
+});
 
-$('#filters').onclick = e => {
-  const b = e.target.closest('button'); if (!b) return;
-  filter = b.dataset.f;
-  selectChip($('#filters'), b);
-  video.className = (facing === 'user' ? 'mirror ' : '') + (filter !== 'none' ? 'f-' + filter : '');
-};
+// ---------- Filtres ----------
+const FILTERS = [
+  { id: 'none', label: 'Original', css: 'none', ops: [] },
+  { id: 'nb', label: 'N&B', css: 'grayscale(1) contrast(1.12)', ops: [['grayscale', 1], ['contrast', 1.12]] },
+  { id: 'sepia', label: 'Sépia', css: 'sepia(0.85) contrast(1.05)', ops: [['sepia', .85], ['contrast', 1.05]] },
+  { id: 'vintage', label: 'Vintage', css: 'sepia(0.35) saturate(0.8) contrast(0.92) brightness(1.06)',
+    ops: [['sepia', .35], ['saturate', .8], ['contrast', .92], ['brightness', 1.06]] },
+  { id: 'vif', label: 'Éclatant', css: 'brightness(1.1) saturate(1.35)', ops: [['brightness', 1.1], ['saturate', 1.35]] },
+  { id: 'froid', label: 'Froid', css: 'hue-rotate(-12deg) saturate(1.1) brightness(1.03)',
+    ops: [['hue', -12], ['saturate', 1.1], ['brightness', 1.03]] }
+];
+const filterCss = id => (FILTERS.find(f => f.id === id) || FILTERS[0]).css;
 
-$('#modes').onclick = e => {
-  const b = e.target.closest('button'); if (!b) return;
-  mode = b.dataset.m;
-  selectChip($('#modes'), b);
-};
-
-const timers = [0, 3, 5, 10];
-$('#timer').onclick = () => {
-  timerSec = timers[(timers.indexOf(timerSec) + 1) % timers.length];
-  $('#timer').textContent = timerSec ? `⏱ ${timerSec} s` : '⏱ off';
-};
-
-// --- Réglages ---
-$('#caption').value = settings.caption;
-$('#withDate').checked = settings.withDate;
-selectChip($('#frames'), $(`#frames button[data-c="${settings.frame}"]`));
-
-$('#openSettings').onclick = () => $('#settings').classList.add('open');
-$('#closeSettings').onclick = () => {
-  settings.caption = $('#caption').value.trim();
-  settings.withDate = $('#withDate').checked;
-  saveSettings();
-  $('#settings').classList.remove('open');
-};
-$('#frames').onclick = e => {
-  const b = e.target.closest('button'); if (!b) return;
-  settings.frame = b.dataset.c;
-  selectChip($('#frames'), b);
-};
-
-// --- Prise de vue ---
-const sleep = ms => new Promise(r => setTimeout(r, ms));
-
-async function countdown(sec) {
-  const el = $('#countdown');
-  for (let i = sec; i > 0; i--) {
-    el.textContent = i;
-    el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
-    await sleep(1000);
+// Matrices des filtres CSS, pour obtenir le même rendu dans l'image enregistrée
+// (le filtre de canvas n'est pas fiable sur Safari).
+function opMatrix(op, a) {
+  const k = 1 - a;
+  switch (op) {
+    case 'grayscale': return [[.2126 + .7874 * k, .7152 - .7152 * k, .0722 - .0722 * k],
+                              [.2126 - .2126 * k, .7152 + .2848 * k, .0722 - .0722 * k],
+                              [.2126 - .2126 * k, .7152 - .7152 * k, .0722 + .9278 * k]];
+    case 'sepia': return [[.393 + .607 * k, .769 - .769 * k, .189 - .189 * k],
+                          [.349 - .349 * k, .686 + .314 * k, .168 - .168 * k],
+                          [.272 - .272 * k, .534 - .534 * k, .131 + .869 * k]];
+    case 'saturate': return [[.213 + .787 * a, .715 - .715 * a, .072 - .072 * a],
+                             [.213 - .213 * a, .715 + .285 * a, .072 - .072 * a],
+                             [.213 - .213 * a, .715 - .715 * a, .072 + .928 * a]];
+    case 'hue': {
+      const t = a * Math.PI / 180, c = Math.cos(t), s = Math.sin(t);
+      return [[.213 + c * .787 - s * .213, .715 - c * .715 - s * .715, .072 - c * .072 + s * .928],
+              [.213 - c * .213 + s * .143, .715 + c * .285 + s * .140, .072 - c * .072 - s * .283],
+              [.213 - c * .213 - s * .787, .715 - c * .715 + s * .715, .072 + c * .928 + s * .072]];
+    }
+    case 'brightness': return [[a, 0, 0], [0, a, 0], [0, 0, a]];
+    case 'contrast': return [[a, 0, 0], [0, a, 0], [0, 0, a]];
   }
-  el.textContent = '';
 }
-
-function flash() {
-  const f = $('#flash'); f.classList.remove('go'); void f.offsetWidth; f.classList.add('go');
-}
-
-// Les filtres sont appliqués pixel par pixel, car ctx.filter n'est pas fiable sur Safari.
-function applyFilter(ctx, w, h) {
-  if (filter === 'none') return;
+function applyFilter(ctx, w, h, id) {
+  const f = FILTERS.find(x => x.id === id);
+  if (!f || !f.ops.length) return;
+  // Compose tous les filtres en une seule transformation affine
+  let M = [[1, 0, 0], [0, 1, 0], [0, 0, 1]], B = [0, 0, 0];
+  for (const [op, a] of f.ops) {
+    const A = opMatrix(op, a);
+    const off = op === 'contrast' ? (0.5 - 0.5 * a) * 255 : 0;
+    const nM = A.map(row => [0, 1, 2].map(j => row[0] * M[0][j] + row[1] * M[1][j] + row[2] * M[2][j]));
+    const nB = A.map(row => row[0] * B[0] + row[1] * B[1] + row[2] * B[2] + off);
+    M = nM; B = nB;
+  }
   const img = ctx.getImageData(0, 0, w, h), d = img.data;
   for (let i = 0; i < d.length; i += 4) {
     const r = d[i], g = d[i + 1], b = d[i + 2];
-    if (filter === 'bw') {
-      let v = 0.299 * r + 0.587 * g + 0.114 * b;
-      v = (v - 128) * 1.1 + 128;
-      d[i] = d[i + 1] = d[i + 2] = v;
-    } else if (filter === 'sepia') {
-      d[i]     = r * .393 + g * .769 + b * .189;
-      d[i + 1] = r * .349 + g * .686 + b * .168;
-      d[i + 2] = r * .272 + g * .534 + b * .131;
-    } else if (filter === 'warm') {
-      d[i]     = r * 1.12 + 8;
-      d[i + 1] = g * 1.03 + 4;
-      d[i + 2] = b * 0.88;
-    }
+    d[i]     = M[0][0] * r + M[0][1] * g + M[0][2] * b + B[0];
+    d[i + 1] = M[1][0] * r + M[1][1] * g + M[1][2] * b + B[1];
+    d[i + 2] = M[2][0] * r + M[2][1] * g + M[2][2] * b + B[2];
   }
   ctx.putImageData(img, 0, 0);
 }
 
-// Capture l'image de la caméra, recadrée au format demandé (largeur / hauteur).
-function grabFrame(aspect) {
+// ---------- Gabarits ----------
+// Grille : feuille 1800 × 1200 (15 × 10 cm). Bande : 600 × 1800 (5 × 15 cm).
+function layoutFor(kind, n) {
+  if (kind === 'bande') {
+    const W = 600, H = 1800, m = 40, bottom = 1564, gap = 40;
+    const h = (bottom - m - (n - 1) * gap) / n;
+    const slots = [];
+    for (let i = 0; i < n; i++) slots.push({ x: m, y: m + i * (h + gap), w: W - 2 * m, h });
+    return { kind, W, H, slots, card: null, footer: { x: 0, y: bottom, w: W, h: H - bottom } };
+  }
+  const W = 1800, H = 1200, m = 48, g = 36, w2 = (W - 2 * m - g) / 2;
+  const footer = { x: 0, y: 1056, w: W, h: H - 1056 };
+  if (n === 1) return { kind, W, H, slots: [{ x: m, y: m, w: W - 2 * m, h: 1008 }], card: null, footer };
+  if (n === 2) return { kind, W, H, slots: [{ x: m, y: m, w: w2, h: 1008 }, { x: m + w2 + g, y: m, w: w2, h: 1008 }], card: null, footer };
+  if (n === 4) {
+    const h = 486;
+    return { kind, W, H, footer, card: null, slots: [
+      { x: m, y: m, w: w2, h }, { x: m + w2 + g, y: m, w: w2, h },
+      { x: m, y: m + h + g, w: w2, h }, { x: m + w2 + g, y: m + h + g, w: w2, h }] };
+  }
+  // 3 photos : grille 2 × 2, la 4e case porte le nom de l'événement
+  const h = (H - 2 * m - g) / 2;
+  return { kind, W, H, footer: null, slots: [
+    { x: m, y: m, w: w2, h }, { x: m + w2 + g, y: m, w: w2, h }, { x: m, y: m + h + g, w: w2, h }],
+    card: { x: m + w2 + g, y: m + h + g, w: w2, h } };
+}
+
+const dateStr = () => new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+
+function fitFont(x, text, maxW, size, weight, family) {
+  let s = size;
+  do {
+    x.font = `${weight} ${s}px ${family}`;
+    if (x.measureText(text).width <= maxW) break;
+    s -= 2;
+  } while (s > 14);
+}
+
+// Fond du montage : papier, case de titre et pied de page (sans les photos)
+function drawBase(x, L) {
+  x.fillStyle = '#FBFAF7';
+  x.fillRect(0, 0, L.W, L.H);
+  const name = S.eventName.trim(), date = S.showDate ? dateStr() : '';
+  if (L.card) {
+    const r = L.card, title = name || 'Photobooth';
+    x.fillStyle = S.accent;
+    x.fillRect(r.x, r.y, r.w, r.h);
+    x.fillStyle = '#141414';
+    x.textAlign = 'center';
+    x.textBaseline = 'middle';
+    fitFont(x, title, r.w * .84, 110, 800, DISPLAY);
+    x.fillText(title, r.x + r.w / 2, r.y + r.h / 2 - (date ? 30 : 0));
+    if (date) {
+      x.font = `500 44px ${BODY}`;
+      x.fillText(date, r.x + r.w / 2, r.y + r.h / 2 + 62);
+    }
+  }
+  if (overlays[L.kind] || !L.footer) return;   // l'overlay remplace le pied de page
+  const f = L.footer, cy = f.y + f.h / 2;
+  x.textBaseline = 'middle';
+  if (L.kind === 'grille') {
+    if (name) {
+      x.fillStyle = '#1A1A1E'; x.textAlign = 'left';
+      fitFont(x, name, L.W * .6, 56, 700, DISPLAY);
+      x.fillText(name, 48, cy);
+    }
+    if (date) {
+      x.fillStyle = '#55555C'; x.textAlign = 'right';
+      x.font = `500 40px ${BODY}`;
+      x.fillText(date, L.W - 48, cy);
+    }
+  } else {
+    x.textAlign = 'center';
+    if (name) {
+      x.fillStyle = '#1A1A1E';
+      fitFont(x, name, L.W - 80, 56, 700, DISPLAY);
+      x.fillText(name, L.W / 2, date ? cy - 28 : cy);
+    }
+    if (date) {
+      x.fillStyle = '#55555C';
+      x.font = `500 34px ${BODY}`;
+      x.fillText(date, L.W / 2, name ? cy + 36 : cy);
+    }
+  }
+}
+
+// Échelle pour que la photo couvre la case, même tournée
+function coverScale(src, e, w, h) {
+  const t = e.rot * Math.PI / 180;
+  const rc = Math.abs(Math.cos(t)) + Math.abs(Math.sin(t)) * Math.max(w / h, h / w);
+  return Math.max(w / src.width, h / src.height) * (e.zoom / 100) * rc;
+}
+
+// Dessine une photo retouchée dans un canvas (dx, dy en fraction de la case)
+function renderPhotoInto(c, src, e, pixelFilter) {
+  const w = c.width, h = c.height, x = c.getContext('2d');
+  x.setTransform(1, 0, 0, 1, 0, 0);
+  x.fillStyle = '#000';
+  x.fillRect(0, 0, w, h);
+  const s = coverScale(src, e, w, h);
+  x.translate(w / 2 + e.dx * w, h / 2 + e.dy * h);
+  x.rotate(e.rot * Math.PI / 180);
+  x.scale(s, s);
+  x.drawImage(src, -src.width / 2, -src.height / 2);
+  x.setTransform(1, 0, 0, 1, 0, 0);
+  if (pixelFilter) applyFilter(x, w, h, e.filter);
+}
+
+function makeCanvas(w, h) {
+  const c = document.createElement('canvas');
+  c.width = Math.round(w); c.height = Math.round(h);
+  return c;
+}
+const toBlob = (c, type, q) => new Promise(r => c.toBlob(r, type, q));
+
+// ---------- Séance ----------
+let session = null;
+const PRAISE = ['Superbe !', 'Magnifique !', 'Parfait !', 'Génial !'];
+
+function capture() {
   const vw = video.videoWidth, vh = video.videoHeight;
-  let cw, ch;
-  if (vw / vh > aspect) { ch = vh; cw = Math.round(vh * aspect); }
-  else { cw = vw; ch = Math.round(vw / aspect); }
-  const sx = Math.round((vw - cw) / 2), sy = Math.round((vh - ch) / 2);
-
-  const canvas = document.createElement('canvas');
-  canvas.width = cw; canvas.height = ch;
-  const ctx = canvas.getContext('2d');
-  if (facing === 'user') { ctx.translate(cw, 0); ctx.scale(-1, 1); }
-  ctx.drawImage(video, sx, sy, cw, ch, 0, 0, cw, ch);
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
-  applyFilter(ctx, cw, ch);
-  return canvas;
+  const c = makeCanvas(vw, vh), x = c.getContext('2d');
+  if (S.facing === 'user' && S.mirror) { x.translate(vw, 0); x.scale(-1, 1); }
+  x.drawImage(video, 0, 0, vw, vh);
+  const small = (w) => {
+    const t = makeCanvas(w, w * vh / vw);
+    t.getContext('2d').drawImage(c, 0, 0, t.width, t.height);
+    return t.toDataURL('image/jpeg', .85);
+  };
+  return { src: c, thumb: small(240), preview: small(1080), edit: { filter: 'none', zoom: 100, rot: 0, dx: 0, dy: 0 } };
 }
 
-function captionLines() {
-  const lines = [];
-  if (settings.caption) lines.push(settings.caption);
-  if (settings.withDate) lines.push(new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }));
-  return lines;
+function flash() {
+  const f = $('#flash');
+  f.classList.remove('go'); void f.offsetWidth; f.classList.add('go');
 }
 
-// Couleur de texte lisible sur la couleur du cadre
-function textColorOn(hex) {
-  const n = parseInt(hex.slice(1), 16);
-  const lum = 0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255);
-  return lum > 150 ? '#111111' : '#ffffff';
+function renderDashes(box, n, filled) {
+  box.innerHTML = '';
+  for (let k = 0; k < n; k++) {
+    const s = document.createElement('span');
+    if (k < filled) s.className = 'on';
+    box.appendChild(s);
+  }
 }
 
-function drawCaption(ctx, lines, cx, top, height, color, unit) {
-  if (!lines.length) return;
-  const big = Math.round(unit * 0.07), small = Math.round(unit * 0.045);
-  const sizes = lines.map((_, i) => (i === 0 && settings.caption) ? big : small);
-  const gap = unit * 0.015;
-  const total = sizes.reduce((a, b) => a + b, 0) + gap * (lines.length - 1);
-  let y = top + (height - total) / 2;
-  ctx.fillStyle = color;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'top';
-  lines.forEach((line, i) => {
-    ctx.font = `${sizes[i] === big ? '700' : '500'} ${sizes[i]}px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`;
-    ctx.fillText(line, cx, y, unit * 0.92);
-    y += sizes[i] + gap;
+function renderThumbs(box, sess, cur, justTaken) {
+  box.innerHTML = '';
+  for (let k = 0; k < sess.n; k++) {
+    const d = document.createElement('div');
+    d.className = 'thumb';
+    const p = sess.photos[k];
+    if (p) {
+      d.classList.add('done');
+      if (justTaken && k === cur) d.classList.add('last');
+      const im = new Image(); im.src = p.thumb; im.alt = '';
+      d.appendChild(im);
+    } else {
+      d.textContent = k + 1;
+      if (!justTaken && k === cur) d.classList.add('cur');
+    }
+    box.appendChild(d);
+  }
+}
+
+async function countdown(sec, token) {
+  const arc = $('#ringArc'), num = $('#countNum'), C = 1345;
+  arc.style.transition = 'none';
+  arc.style.strokeDashoffset = '0';
+  void arc.getBoundingClientRect();
+  arc.style.transition = '';
+  for (let k = sec; k > 0; k--) {
+    if (token.cancelled) return;
+    num.textContent = k;
+    num.classList.remove('pop'); void num.offsetWidth; num.classList.add('pop');
+    arc.style.strokeDashoffset = String(C * (1 - (k - 1) / sec));
+    await sleep(1000);
+  }
+  num.textContent = '';
+}
+
+async function waitWithBar(ms, token) {
+  const bar = $('#shotBar'), txt = $('#shotNextTxt'), t0 = performance.now();
+  for (;;) {
+    if (token.cancelled) return;
+    const e = performance.now() - t0;
+    if (e >= ms) break;
+    bar.style.width = (e / ms * 100) + '%';
+    txt.textContent = `Prochaine photo dans ${Math.ceil((ms - e) / 1000)} s`;
+    await sleep(100);
+  }
+}
+
+async function runSession() {
+  if (!stream || session?.running) return;
+  const token = { cancelled: false };
+  const sess = { n: S.shots, layout: S.layout, photos: [], sel: 0, token, running: true };
+  session = sess;
+  try {
+    for (let i = 0; i < sess.n; i++) {
+      $('#countLabel').textContent = `Photo ${i + 1} sur ${sess.n}`;
+      renderDashes($('#countDashes'), sess.n, i + 1);
+      renderThumbs($('#countThumbs'), sess, i, false);
+      show('count');
+      await countdown(S.timer, token);
+      if (token.cancelled) return;
+
+      flash();
+      sess.photos.push(capture());
+
+      const left = sess.n - i - 1;
+      const p = sess.photos[i];
+      $('#shotBg').src = p.preview;
+      $('#shotImg').src = p.preview;
+      $('#shotLabel').textContent = `Photo ${i + 1} sur ${sess.n}`;
+      renderDashes($('#shotDashes'), sess.n, i + 1);
+      renderThumbs($('#shotThumbs'), sess, i, true);
+      $('#shotTitle').textContent = left ? PRAISE[i % PRAISE.length] : "C'est dans la boîte !";
+      $('#shotSub').textContent = left
+        ? (left > 1 ? `Plus que ${left} photos. ` : "Plus qu'une photo. ") + "Changez de pose, de grimace ou d'accessoire."
+        : (S.retouch ? 'Place à la retouche…' : 'Préparation du montage…');
+      $('#shotNext').hidden = !left;
+      const pol = $('#polaroid');
+      pol.style.animation = 'none'; void pol.offsetWidth; pol.style.animation = '';
+      show('shot');
+      if (left) await waitWithBar(S.pause * 1000, token);
+      else await sleep(1600);
+      if (token.cancelled) return;
+    }
+  } finally {
+    sess.running = false;
+  }
+  if (S.retouch) openEdit(); else openResult();
+}
+
+$('#startSession').onclick = runSession;
+$$('.cancel').forEach(b => b.onclick = () => {
+  if (session) session.token.cancelled = true;
+  session = null;
+  show('home');
+});
+
+// ---------- Retouche ----------
+let paper = null;   // { L, slots: [{ d, c, r }], frame }
+let slotQueued = new Set(), slotRaf = 0;
+
+async function openEdit() {
+  show('edit');
+  session.sel = 0;
+  await fontsReady;
+  await overlaysReady;
+  buildPaper();
+  refreshPanel();
+  startAuto('edit');
+}
+
+function place(el, r, L) {
+  el.style.left = (r.x / L.W * 100) + '%';
+  el.style.top = (r.y / L.H * 100) + '%';
+  el.style.width = (r.w / L.W * 100) + '%';
+  el.style.height = (r.h / L.H * 100) + '%';
+}
+
+function buildPaper() {
+  const box = $('#paperBox'), el = $('#paper');
+  const L = layoutFor(session.layout, session.n);
+  const k = Math.min(box.clientWidth / L.W, box.clientHeight / L.H);
+  const pw = Math.floor(L.W * k), ph = Math.floor(L.H * k);
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  el.style.width = pw + 'px';
+  el.style.height = ph + 'px';
+  el.innerHTML = '';
+
+  const base = makeCanvas(pw * dpr, ph * dpr);
+  base.className = 'base';
+  const bx = base.getContext('2d');
+  bx.setTransform(base.width / L.W, 0, 0, base.height / L.H, 0, 0);
+  drawBase(bx, L);
+  el.appendChild(base);
+
+  const slots = L.slots.map((r, i) => {
+    const d = document.createElement('div');
+    d.className = 'slot';
+    d.setAttribute('role', 'button');
+    d.setAttribute('aria-label', `Photo ${i + 1}`);
+    place(d, r, L);
+    const c = makeCanvas(Math.max(1, r.w * k * dpr), Math.max(1, r.h * k * dpr));
+    d.appendChild(c);
+    el.appendChild(d);
+    attachSlotEvents(d, i);
+    return { d, c, r };
+  });
+
+  if (overlays[L.kind]) {
+    const im = document.createElement('img');
+    im.className = 'overlay'; im.alt = ''; im.src = overlays[L.kind].url;
+    el.appendChild(im);
+  }
+
+  const frame = document.createElement('div');
+  frame.className = 'sel-frame';
+  frame.innerHTML = '<i></i><i></i><i></i><i></i><span class="sel-hint"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#F5F5F2" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18M3 12h18M8 7l4-4 4 4M8 17l4 4 4-4M7 8l-4 4 4 4M17 8l4 4-4 4"/></svg>Glissez ou pincez pour cadrer</span>';
+  el.appendChild(frame);
+
+  paper = { L, k, slots, frame };
+  slots.forEach((_, i) => drawSlot(i));
+  placeSel();
+}
+
+function drawSlot(i) {
+  const { c } = paper.slots[i], p = session.photos[i];
+  renderPhotoInto(c, p.src, p.edit, false);
+  c.style.filter = filterCss(p.edit.filter);
+}
+function queueSlot(i) {
+  slotQueued.add(i);
+  if (!slotRaf) slotRaf = requestAnimationFrame(() => {
+    slotRaf = 0;
+    slotQueued.forEach(drawSlot);
+    slotQueued.clear();
   });
 }
 
-// Une photo, avec cadre et texte éventuels
-function composeSingle(photo) {
-  const w = photo.width, h = photo.height, unit = Math.min(w, h);
-  const lines = captionLines();
-  const out = document.createElement('canvas');
-  const ctx = out.getContext('2d');
+function placeSel() {
+  const s = paper.slots[session.sel];
+  place(paper.frame, s.r, paper.L);
+  paper.frame.querySelector('.sel-hint').hidden = s.r.w * paper.k < 230 || s.r.h * paper.k < 110;
+}
 
-  if (settings.frame === 'none') {
-    out.width = w; out.height = h;
-    ctx.drawImage(photo, 0, 0);
-    if (lines.length) {
-      const band = unit * (lines.length > 1 ? 0.2 : 0.14);
-      const grad = ctx.createLinearGradient(0, h - band * 1.4, 0, h);
-      grad.addColorStop(0, 'rgba(0,0,0,0)');
-      grad.addColorStop(1, 'rgba(0,0,0,.65)');
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, h - band * 1.4, w, band * 1.4);
-      drawCaption(ctx, lines, w / 2, h - band, band * 0.9, '#ffffff', unit);
+function clampEdit(i) {
+  const p = session.photos[i], r = paper.slots[i].r, e = p.edit;
+  const s = coverScale(p.src, e, r.w, r.h);
+  const mx = Math.max(0, (p.src.width * s - r.w) / (2 * r.w));
+  const my = Math.max(0, (p.src.height * s - r.h) / (2 * r.h));
+  e.dx = clamp(e.dx, -mx, mx);
+  e.dy = clamp(e.dy, -my, my);
+}
+
+function selectSlot(i) {
+  if (session.sel === i) return;
+  session.sel = i;
+  placeSel();
+  refreshPanel();
+}
+
+// Glisser pour recadrer, pincer pour zoomer
+function attachSlotEvents(d, i) {
+  const pts = new Map();
+  let pinch = null;
+  d.addEventListener('pointerdown', ev => {
+    selectSlot(i);
+    d.setPointerCapture(ev.pointerId);
+    pts.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+    pinch = null;
+  });
+  d.addEventListener('pointermove', ev => {
+    if (!pts.has(ev.pointerId)) return;
+    const e = session.photos[i].edit, prev = pts.get(ev.pointerId);
+    pts.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+    if (pts.size === 1) {
+      const rect = d.getBoundingClientRect();
+      e.dx += (ev.clientX - prev.x) / rect.width;
+      e.dy += (ev.clientY - prev.y) / rect.height;
+    } else if (pts.size === 2) {
+      const [a, b] = [...pts.values()];
+      const dist = Math.hypot(a.x - b.x, a.y - b.y);
+      if (!pinch) pinch = { dist, zoom: e.zoom };
+      e.zoom = clamp(Math.round(pinch.zoom * dist / pinch.dist), 100, 200);
     }
-    return out;
+    clampEdit(i);
+    queueSlot(i);
+    syncSliders();
+  });
+  const end = ev => { pts.delete(ev.pointerId); pinch = null; };
+  d.addEventListener('pointerup', end);
+  d.addEventListener('pointercancel', end);
+}
+
+function refreshPanel() {
+  const i = session.sel, n = session.n, p = session.photos[i], e = p.edit;
+  $('#selLabel').textContent = `Photo ${i + 1} sur ${n}`;
+  $('#validate span').textContent = n > 1 ? `Valider les ${n} photos` : 'Valider la photo';
+  const t = makeCanvas(180, 120);
+  renderPhotoInto(t, p.src, Object.assign({}, e, { filter: 'none' }), false);
+  const url = t.toDataURL('image/jpeg', .8);
+  const grid = $('#filterGrid');
+  grid.innerHTML = '';
+  FILTERS.forEach(f => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'fbtn' + (f.id === e.filter ? ' on' : '');
+    b.setAttribute('aria-pressed', f.id === e.filter);
+    const im = new Image(); im.src = url; im.alt = ''; im.style.filter = f.css;
+    const s = document.createElement('span'); s.textContent = f.label;
+    b.append(im, s);
+    b.onclick = () => { e.filter = f.id; drawSlot(i); refreshPanel(); };
+    grid.appendChild(b);
+  });
+  syncSliders();
+}
+
+function syncSliders() {
+  const e = session.photos[session.sel].edit;
+  $('#zoom').value = e.zoom;
+  $('#zoomTxt').textContent = e.zoom + ' %';
+  $('#rot').value = e.rot;
+  $('#rotTxt').textContent = (e.rot > 0 ? '+' : '') + e.rot + '°';
+}
+
+function editCurrent(patch) {
+  const i = session.sel;
+  Object.assign(session.photos[i].edit, patch);
+  clampEdit(i);
+  queueSlot(i);
+  syncSliders();
+}
+$('#zoom').addEventListener('input', ev => editCurrent({ zoom: Number(ev.target.value) }));
+$('#rot').addEventListener('input', ev => editCurrent({ rot: Number(ev.target.value) }));
+$('#zoomIn').onclick = () => editCurrent({ zoom: clamp(session.photos[session.sel].edit.zoom + 10, 100, 200) });
+$('#zoomOut').onclick = () => editCurrent({ zoom: clamp(session.photos[session.sel].edit.zoom - 10, 100, 200) });
+$('#rotLeft').onclick = () => editCurrent({ rot: clamp(session.photos[session.sel].edit.rot - 1, -20, 20) });
+$('#rotRight').onclick = () => editCurrent({ rot: clamp(session.photos[session.sel].edit.rot + 1, -20, 20) });
+$('#resetEdit').onclick = () => {
+  Object.assign(session.photos[session.sel].edit, { filter: 'none', zoom: 100, rot: 0, dx: 0, dy: 0 });
+  drawSlot(session.sel);
+  refreshPanel();
+};
+$('#validate').onclick = () => openResult();
+$('#restart').onclick = () => {
+  if (confirm('Recommencer la séance ? Les photos prises seront perdues.')) { session = null; show('home'); }
+};
+
+let resizeTimer = 0;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => { if (screen === 'edit' && session) buildPaper(); }, 150);
+});
+
+// ---------- Validation et retour automatiques ----------
+let auto = null;
+function startAuto(kind) {
+  stopAuto();
+  const secs = kind === 'edit' ? S.editTimeout : S.resultTimeout;
+  $('#autoBack').hidden = kind === 'result' && !secs;
+  if (!secs) return;
+  auto = { kind, total: secs * 1000, deadline: performance.now() + secs * 1000 };
+  auto.iv = setInterval(tickAuto, 250);
+  tickAuto();
+}
+function stopAuto() {
+  if (auto) clearInterval(auto.iv);
+  auto = null;
+  $('#autoVal').textContent = '';
+}
+function bumpAuto() { if (auto) auto.deadline = performance.now() + auto.total; }
+function tickAuto() {
+  const left = Math.max(0, auto.deadline - performance.now()), s = Math.ceil(left / 1000);
+  if (auto.kind === 'edit') {
+    $('#autoVal').textContent = `Validation auto dans ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+  } else {
+    $('#autoBackTxt').textContent = `Retour à l'accueil dans ${s} s`;
+    $('#autoBackBar').style.width = (left / auto.total * 100) + '%';
   }
-
-  const pad = Math.round(unit * 0.04);
-  const footer = lines.length ? Math.round(unit * (lines.length > 1 ? 0.2 : 0.14)) : pad;
-  out.width = w + pad * 2;
-  out.height = h + pad + footer;
-  ctx.fillStyle = settings.frame;
-  ctx.fillRect(0, 0, out.width, out.height);
-  ctx.drawImage(photo, pad, pad);
-  drawCaption(ctx, lines, out.width / 2, pad + h, footer, textColorOn(settings.frame), unit);
-  return out;
+  if (left <= 0) {
+    const k = auto.kind;
+    stopAuto();
+    if (k === 'edit') openResult(); else finish();
+  }
 }
+['#s-edit', '#s-result'].forEach(id => $(id).addEventListener('pointerdown', bumpAuto, true));
 
-// Bande verticale de 3 photos (style photomaton)
-function composeStrip(photos) {
-  const w = photos[0].width, h = photos[0].height;
-  const unit = w;
-  const frame = settings.frame === 'none' ? '#ffffff' : settings.frame;
-  const lines = captionLines();
-  const pad = Math.round(w * 0.05);
-  const footer = lines.length ? Math.round(unit * (lines.length > 1 ? 0.24 : 0.17)) : pad;
-  const out = document.createElement('canvas');
-  out.width = w + pad * 2;
-  out.height = photos.length * h + (photos.length + 1) * pad - pad + footer;
-  const ctx = out.getContext('2d');
-  ctx.fillStyle = frame;
-  ctx.fillRect(0, 0, out.width, out.height);
-  photos.forEach((p, i) => ctx.drawImage(p, pad, pad + i * (h + pad)));
-  drawCaption(ctx, lines, out.width / 2, photos.length * (h + pad), footer, textColorOn(frame), unit);
-  return out;
-}
+// ---------- Résultat ----------
+let montageBlob = null, montageUrl = null, photoFiles = null;
 
-// Réduit une photo à une largeur maximale (pour garder la bande à une taille raisonnable)
-function fitWidth(canvas, maxW) {
-  if (canvas.width <= maxW) return canvas;
-  const c = document.createElement('canvas');
-  c.width = maxW; c.height = Math.round(canvas.height * maxW / canvas.width);
-  c.getContext('2d').drawImage(canvas, 0, 0, c.width, c.height);
+async function renderMontage(scale) {
+  await fontsReady;
+  await overlaysReady;
+  const L = layoutFor(session.layout, session.n);
+  const c = makeCanvas(L.W * scale, L.H * scale), x = c.getContext('2d');
+  x.setTransform(scale, 0, 0, scale, 0, 0);
+  drawBase(x, L);
+  x.setTransform(1, 0, 0, 1, 0, 0);
+  L.slots.forEach((r, i) => {
+    const p = session.photos[i];
+    const t = makeCanvas(r.w * scale, r.h * scale);
+    renderPhotoInto(t, p.src, p.edit, true);
+    x.drawImage(t, Math.round(r.x * scale), Math.round(r.y * scale));
+  });
+  if (overlays[L.kind]) x.drawImage(overlays[L.kind].img, 0, 0, c.width, c.height);
   return c;
 }
 
-$('#shutter').onclick = async () => {
-  if (busy || !stream) return;
-  busy = true;
-  document.body.classList.add('busy');
-  const progress = $('#progress');
-  try {
-    let result;
-    if (mode === 'strip') {
-      const photos = [];
-      for (let i = 0; i < SHOTS; i++) {
-        progress.textContent = `Photo ${i + 1} / ${SHOTS}`;
-        progress.classList.add('show');
-        await countdown(i === 0 ? (timerSec || 3) : 3);
-        flash();
-        photos.push(fitWidth(grabFrame(4 / 3), 1000));
-        await sleep(500);
-      }
-      progress.classList.remove('show');
-      result = composeStrip(photos);
-    } else {
-      if (timerSec) await countdown(timerSec);
-      flash();
-      result = composeSingle(grabFrame(window.innerWidth / window.innerHeight));
-    }
-    const blob = await new Promise(r => result.toBlob(r, 'image/jpeg', 0.92));
-    showReview(blob);
-  } finally {
-    progress.classList.remove('show');
-    document.body.classList.remove('busy');
-    busy = false;
+// Chaque photo seule, recadrée comme dans le montage (côté long : 2000 px)
+async function renderSingles() {
+  const L = layoutFor(session.layout, session.n), files = [];
+  for (let i = 0; i < session.n; i++) {
+    const r = L.slots[i], k = 2000 / Math.max(r.w, r.h);
+    const c = makeCanvas(r.w * k, r.h * k);
+    renderPhotoInto(c, session.photos[i].src, session.photos[i].edit, true);
+    files.push(new File([await toBlob(c, 'image/jpeg', .92)], fileName('photo-' + (i + 1)), { type: 'image/jpeg' }));
   }
-};
-
-function showReview(blob) {
-  lastBlob = blob;
-  if (lastUrl) URL.revokeObjectURL(lastUrl);
-  lastUrl = URL.createObjectURL(blob);
-  $('#shot').src = lastUrl;
-  $('#thumb').style.backgroundImage = `url(${lastUrl})`;
-  $('#thumb').disabled = false;
-  $('#hint').textContent = isIOS
-    ? "Sur iPad : touchez « Enregistrer » puis « Enregistrer l'image » pour l'ajouter à Photos."
-    : "Sur Android : la photo est enregistrée dans Téléchargements (visible dans la galerie).";
-  $('#review').classList.add('open');
+  return files;
 }
 
-$('#thumb').onclick = () => { if (lastBlob) $('#review').classList.add('open'); };
-$('#retake').onclick = () => $('#review').classList.remove('open');
-
-function fileName() {
+function fileName(suffix) {
   const d = new Date(), p = n => String(n).padStart(2, '0');
-  return `photobooth-${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}.jpg`;
+  return `photobooth-${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}-${suffix}.jpg`;
 }
 
-function download(blob, name) {
+async function openResult() {
+  const sess = session;
+  if (!sess) return;
+  show('result');
+  startAuto('result');
+  const n = sess.n;
+  $('#resultSub').textContent = n > 1 ? `Vos ${n} photos et le montage sont prêts.` : 'Votre photo est prête.';
+  $('#savePhotos').hidden = n === 1;
+  $('#saveMontage').disabled = true;
+  $('#savePhotos').disabled = true;
+  $('#saveHint').textContent = isIOS
+    ? "Touchez « Enregistrer », puis « Enregistrer l'image » pour l'ajouter à Photos."
+    : 'Les images sont enregistrées dans Téléchargements, visibles dans la galerie.';
+  $('#montage').removeAttribute('src');
+  $('#resultWait').hidden = false;
+  montageBlob = null; photoFiles = null;
+
+  await sleep(30);   // laisse l'écran s'afficher avant le calcul
+  const blob = await toBlob(await renderMontage(2), 'image/jpeg', .92);
+  if (session !== sess || screen !== 'result') return;
+  montageBlob = blob;
+  if (montageUrl) URL.revokeObjectURL(montageUrl);
+  montageUrl = URL.createObjectURL(blob);
+  $('#montage').src = montageUrl;
+  $('#resultWait').hidden = true;
+  $('#saveMontage').disabled = false;
+  // Préparées à l'avance : iPad n'autorise le partage que juste après un toucher
+  photoFiles = await renderSingles();
+  if (session === sess) $('#savePhotos').disabled = false;
+}
+
+function download(file) {
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = name;
+  a.href = URL.createObjectURL(file);
+  a.download = file.name;
   document.body.appendChild(a);
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 4000);
 }
 
-$('#save').onclick = async () => {
-  if (!lastBlob) return;
-  const name = fileName();
-  const file = new File([lastBlob], name, { type: 'image/jpeg' });
-  // iPad : la feuille de partage propose « Enregistrer l'image » → pellicule Photos.
-  // Android : téléchargement direct (dossier Téléchargements, visible dans la galerie).
-  if (isIOS && navigator.canShare?.({ files: [file] })) {
+// iPad : feuille de partage (« Enregistrer l'image » → Photos). Android : téléchargement.
+async function saveFiles(files) {
+  if (isIOS && navigator.canShare?.({ files })) {
     try {
-      await navigator.share({ files: [file] });
-      return;
+      await navigator.share({ files });
+      return 'shared';
     } catch (e) {
-      if (e.name === 'AbortError') return;
+      if (e.name === 'AbortError') return 'aborted';
     }
   }
-  download(lastBlob, name);
+  for (const f of files) { download(f); await sleep(500); }
+  return 'downloaded';
+}
+
+$('#saveMontage').onclick = async () => {
+  if (!montageBlob) return;
+  const r = await saveFiles([new File([montageBlob], fileName('montage'), { type: 'image/jpeg' })]);
+  if (r === 'downloaded') $('#saveHint').textContent = 'Montage enregistré dans Téléchargements.';
+};
+$('#savePhotos').onclick = async () => {
+  if (!photoFiles) return;
+  const r = await saveFiles(photoFiles);
+  if (r === 'downloaded') $('#saveHint').textContent = 'Photos enregistrées dans Téléchargements.';
+};
+$('#backEdit').onclick = () => openEdit();
+function finish() { session = null; show('home'); }
+$('#finish').onclick = finish;
+
+// ---------- Réglages ----------
+function openSettings() {
+  show('settings');
+  $('#s-settings').scrollTop = 0;
+  syncSettings();
+  drawPreview();
+}
+$('#openSettings').onclick = () => {
+  if (!S.pin) return openSettings();
+  $('#pinInput').value = '';
+  $('#pinErr').textContent = '';
+  $('#pinModal').classList.add('open');
+  setTimeout(() => $('#pinInput').focus(), 50);
+};
+$('#startSettings').onclick = openSettings;
+$('#pinCancel').onclick = () => $('#pinModal').classList.remove('open');
+function checkPin() {
+  if ($('#pinInput').value === S.pin) {
+    $('#pinModal').classList.remove('open');
+    openSettings();
+  } else {
+    $('#pinErr').textContent = 'Code incorrect.';
+  }
+}
+$('#pinOk').onclick = checkPin;
+$('#pinInput').addEventListener('keydown', e => { if (e.key === 'Enter') checkPin(); });
+
+$('#closeSettings').onclick = () => {
+  refreshHome();
+  show(stream?.active ? 'home' : 'start');
 };
 
-// Empêche l'écran de se mettre en veille pendant la soirée
-async function keepAwake() {
-  try {
-    let lock = await navigator.wakeLock?.request('screen');
-    document.addEventListener('visibilitychange', async () => {
-      if (document.visibilityState === 'visible') {
-        lock = await navigator.wakeLock?.request('screen');
-        if (stream && !stream.active) startCamera().catch(() => {});
-      }
+function syncSettings() {
+  $$('.seg[data-key]').forEach(seg => {
+    seg.querySelectorAll('button').forEach(b => {
+      const on = b.dataset.v === String(S[seg.dataset.key]);
+      b.classList.toggle('on', on);
+      b.setAttribute('aria-pressed', on);
     });
-  } catch (e) {}
+  });
+  $$('input.switch[data-key]').forEach(cb => cb.checked = !!S[cb.dataset.key]);
+  if (document.activeElement !== $('#evName')) $('#evName').value = S.eventName;
+  if (document.activeElement !== $('#pinField')) $('#pinField').value = S.pin;
+  const camOk = !!stream?.active;
+  $('#camDot').className = 'dot ' + (camOk ? 'ok' : 'off');
+  $('#camTxt').textContent = camOk ? 'OK' : 'Inactive';
+  $('#stDot').className = 'dot ' + (camOk ? 'ok' : 'off');
+  $('#stText').textContent = camOk ? 'Prêt' : 'Caméra inactive';
+  refreshOverlayUI();
 }
+
+function onSettingChange(k) {
+  if (k === 'facing') startCamera().then(syncSettings).catch(() => {});
+  if (k === 'facing' || k === 'mirror') updateMirror();
+  if (k === 'accent') applyAccent();
+  refreshHome();
+  if (['layout', 'shots', 'eventName', 'showDate', 'accent'].includes(k)) drawPreview();
+  syncSettings();
+}
+
+$$('.seg[data-key]').forEach(seg => seg.addEventListener('click', ev => {
+  const b = ev.target.closest('button');
+  if (!b) return;
+  const k = seg.dataset.key, raw = b.dataset.v;
+  S[k] = /^-?\d+$/.test(raw) ? Number(raw) : raw;
+  saveSettings();
+  onSettingChange(k);
+}));
+$$('input.switch[data-key]').forEach(cb => cb.addEventListener('change', () => {
+  S[cb.dataset.key] = cb.checked;
+  saveSettings();
+  onSettingChange(cb.dataset.key);
+}));
+$('#evName').addEventListener('input', ev => {
+  S.eventName = ev.target.value;
+  saveSettings();
+  onSettingChange('eventName');
+});
+$('#pinField').addEventListener('input', ev => {
+  ev.target.value = ev.target.value.replace(/\D/g, '').slice(0, 6);
+  S.pin = ev.target.value;
+  saveSettings();
+});
+
+function overlaySpec() {
+  const L = layoutFor(S.layout, S.shots);
+  const n = S.shots, size = S.layout === 'grille' ? 'feuille 15 × 10 cm' : 'bande 5 × 15 cm';
+  return `PNG ${L.W} × ${L.H} px · ${size} · ${n} photo${n > 1 ? 's' : ''}`;
+}
+function refreshOverlayUI() {
+  const ov = overlays[S.layout];
+  $('#overlayHas').hidden = !ov;
+  $('#overlayAdd').hidden = !!ov;
+  $('#overlaySpecAdd').textContent = overlaySpec();
+  if (ov) {
+    const L = layoutFor(S.layout, S.shots);
+    const ratioOk = Math.abs(ov.img.naturalWidth / ov.img.naturalHeight - L.W / L.H) < .02;
+    $('#overlayName').textContent = ov.name;
+    $('#overlaySpecHas').textContent = `${ov.img.naturalWidth} × ${ov.img.naturalHeight} px` +
+      (ratioOk ? '' : ' · proportions différentes du gabarit, l\'overlay sera étiré');
+  }
+}
+
+async function drawPreview() {
+  await fontsReady;
+  await overlaysReady;
+  const L = layoutFor(S.layout, S.shots), cv = $('#previewCanvas');
+  const k = Math.min(560 / L.W, 340 / L.H);
+  cv.width = Math.round(L.W * k * 2);
+  cv.height = Math.round(L.H * k * 2);
+  cv.style.width = Math.round(L.W * k) + 'px';
+  const x = cv.getContext('2d');
+  x.setTransform(cv.width / L.W, 0, 0, cv.height / L.H, 0, 0);
+  drawBase(x, L);
+  L.slots.forEach((r, i) => {
+    x.fillStyle = '#3A302B';
+    x.fillRect(r.x, r.y, r.w, r.h);
+    x.fillStyle = 'rgba(245,245,242,.6)';
+    x.textAlign = 'center';
+    x.textBaseline = 'middle';
+    x.font = `600 ${Math.round(Math.min(r.w, r.h) * .13)}px ${BODY}`;
+    x.fillText('Photo ' + (i + 1), r.x + r.w / 2, r.y + r.h / 2);
+  });
+  if (overlays[L.kind]) x.drawImage(overlays[L.kind].img, 0, 0, L.W, L.H);
+}
+
+$('#overlayAdd').onclick = () => $('#overlayFile').click();
+$('#overlayFile').addEventListener('change', async ev => {
+  const f = ev.target.files[0];
+  ev.target.value = '';
+  if (!f) return;
+  const rec = { blob: f, name: f.name };
+  try { await idb.set('overlay-' + S.layout, rec); } catch (e) {}
+  if (overlays[S.layout]) URL.revokeObjectURL(overlays[S.layout].url);
+  try { overlays[S.layout] = await toOverlay(rec); } catch (e) { return; }
+  refreshOverlayUI();
+  drawPreview();
+});
+$('#overlayRemove').onclick = async () => {
+  try { await idb.del('overlay-' + S.layout); } catch (e) {}
+  if (overlays[S.layout]) URL.revokeObjectURL(overlays[S.layout].url);
+  delete overlays[S.layout];
+  refreshOverlayUI();
+  drawPreview();
+};
+
+// Modèle vide : papier blanc, emplacements des photos transparents
+$('#templateDl').onclick = async () => {
+  const L = layoutFor(S.layout, S.shots), c = makeCanvas(L.W, L.H), x = c.getContext('2d');
+  x.fillStyle = '#FFFFFF';
+  x.fillRect(0, 0, L.W, L.H);
+  x.setLineDash([12, 10]);
+  x.lineWidth = 2;
+  x.strokeStyle = '#B0B0B0';
+  L.slots.forEach(r => { x.clearRect(r.x, r.y, r.w, r.h); x.strokeRect(r.x - 1, r.y - 1, r.w + 2, r.h + 2); });
+  if (L.card) x.strokeRect(L.card.x, L.card.y, L.card.w, L.card.h);
+  const blob = await toBlob(c, 'image/png');
+  saveFiles([new File([blob], `modele-${S.layout}-${S.shots}-photos.png`, { type: 'image/png' })]);
+};
+
+// ---------- Démarrage ----------
+applyAccent();
+refreshHome();
+show('start');
+(async () => {
+  // Si la caméra est déjà autorisée pour ce site, on saute l'écran de démarrage.
+  try {
+    const perm = await navigator.permissions?.query({ name: 'camera' });
+    if (perm?.state === 'granted') await launch();
+  } catch (e) {}
+})();
 </script>
 </body>
 </html>
