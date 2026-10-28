@@ -1,0 +1,527 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#111111">
+<title>Photobooth</title>
+<style>
+  :root {
+    --bg: #111;
+    --fg: #fff;
+    --accent: #ff3d6e;
+    --panel: rgba(0,0,0,.55);
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; height: 100%; background: var(--bg); color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    overflow: hidden; user-select: none; -webkit-user-select: none;
+  }
+  #stage { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: #000; }
+  video { width: 100%; height: 100%; object-fit: cover; }
+  video.mirror { transform: scaleX(-1); }
+  video.f-bw { filter: grayscale(1) contrast(1.1); }
+  video.f-sepia { filter: sepia(.85) contrast(1.05); }
+  video.f-warm { filter: saturate(1.3) sepia(.2) brightness(1.05); }
+
+  #countdown {
+    position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+    font-size: min(40vw, 40vh); font-weight: 800; color: #fff;
+    text-shadow: 0 0 40px rgba(0,0,0,.6); pointer-events: none; opacity: 0;
+  }
+  #countdown.show { animation: pop 1s ease-out; }
+  @keyframes pop { 0% { opacity: 0; transform: scale(1.6); } 20% { opacity: 1; transform: scale(1); } 100% { opacity: 0; transform: scale(.8); } }
+
+  #progress {
+    position: fixed; top: 50%; left: 50%; transform: translate(-50%, calc(-50% - min(24vw, 24vh)));
+    background: var(--panel); padding: 8px 18px; border-radius: 999px; font-size: 20px; font-weight: 700;
+    pointer-events: none; display: none;
+  }
+  #progress.show { display: block; }
+
+  #flash { position: fixed; inset: 0; background: #fff; opacity: 0; pointer-events: none; }
+  #flash.go { animation: flash .5s ease-out; }
+  @keyframes flash { 0% { opacity: 1; } 100% { opacity: 0; } }
+
+  .bar {
+    position: fixed; left: 0; right: 0; display: flex; align-items: center; justify-content: center;
+    gap: 16px; padding: 16px; padding-left: max(16px, env(safe-area-inset-left)); padding-right: max(16px, env(safe-area-inset-right));
+  }
+  #top { top: 0; padding-top: max(16px, env(safe-area-inset-top)); justify-content: space-between; flex-wrap: wrap; }
+  #top .right { display: flex; gap: 8px; }
+  #bottom { bottom: 0; padding-bottom: max(24px, env(safe-area-inset-bottom)); justify-content: space-around; }
+  body.busy .bar { opacity: 0; pointer-events: none; transition: opacity .2s; }
+
+  button {
+    font: inherit; color: var(--fg); background: var(--panel); border: 1px solid rgba(255,255,255,.2);
+    border-radius: 999px; padding: 12px 18px; font-size: 16px; cursor: pointer;
+    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  }
+  button:active { transform: scale(.96); }
+  button:disabled { opacity: .4; }
+
+  #shutter {
+    width: 84px; height: 84px; padding: 0; border-radius: 50%;
+    background: #fff; border: 6px solid rgba(255,255,255,.4); background-clip: padding-box;
+    box-shadow: 0 0 0 3px #fff;
+  }
+  #shutter:active { background: var(--accent); }
+
+  #thumb {
+    width: 64px; height: 64px; border-radius: 12px; padding: 0; overflow: hidden;
+    background: var(--panel) center/cover no-repeat;
+  }
+
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; }
+  .chips button { padding: 8px 14px; font-size: 14px; }
+  .chips button.on { background: var(--accent); border-color: var(--accent); }
+
+  /* Écran de prévisualisation après la prise */
+  #review {
+    position: fixed; inset: 0; background: rgba(0,0,0,.92); display: none;
+    flex-direction: column; align-items: center; justify-content: center; gap: 20px; padding: 24px;
+  }
+  #review.open { display: flex; }
+  #review img { max-width: 100%; max-height: 72vh; border-radius: 8px; box-shadow: 0 10px 40px rgba(0,0,0,.6); }
+  #review .actions { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+  #save { background: var(--accent); border-color: var(--accent); font-weight: 700; font-size: 18px; padding: 14px 28px; }
+  #hint { font-size: 14px; opacity: .7; text-align: center; max-width: 480px; }
+
+  /* Réglages */
+  #settings {
+    position: fixed; inset: 0; background: rgba(0,0,0,.8); display: none;
+    align-items: center; justify-content: center; padding: 16px;
+  }
+  #settings.open { display: flex; }
+  #settings .card {
+    background: #1d1d1f; border-radius: 20px; padding: 24px; width: 100%; max-width: 440px;
+    display: flex; flex-direction: column; gap: 18px;
+  }
+  #settings h2 { margin: 0; font-size: 22px; }
+  #settings label { display: flex; flex-direction: column; gap: 8px; font-size: 14px; opacity: .9; }
+  #settings label.row { flex-direction: row; align-items: center; gap: 10px; font-size: 16px; }
+  #settings input[type=text] {
+    font: inherit; font-size: 18px; padding: 12px 14px; border-radius: 12px;
+    border: 1px solid rgba(255,255,255,.2); background: #000; color: #fff;
+    user-select: text; -webkit-user-select: text;
+  }
+  #settings input[type=checkbox] { width: 22px; height: 22px; accent-color: var(--accent); }
+  #settings .close { background: var(--accent); border-color: var(--accent); font-weight: 700; align-self: flex-end; }
+
+  #start {
+    position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 20px; background: var(--bg); text-align: center; padding: 24px;
+  }
+  #start h1 { font-size: 48px; margin: 0; }
+  #start button { background: var(--accent); border-color: var(--accent); font-size: 20px; padding: 16px 32px; font-weight: 700; }
+  #error { color: #ff8080; max-width: 480px; }
+</style>
+</head>
+<body>
+
+<div id="stage"><video id="video" autoplay playsinline muted></video></div>
+<div id="countdown"></div>
+<div id="progress"></div>
+<div id="flash"></div>
+
+<div id="top" class="bar">
+  <div class="chips" id="filters">
+    <button data-f="none" class="on">Normal</button>
+    <button data-f="bw">N&amp;B</button>
+    <button data-f="sepia">Sépia</button>
+    <button data-f="warm">Chaud</button>
+  </div>
+  <div class="right">
+    <div class="chips" id="modes">
+      <button data-m="single" class="on">1 photo</button>
+      <button data-m="strip">Bande ×4</button>
+    </div>
+    <button id="timer" title="Minuteur">⏱ 3 s</button>
+    <button id="openSettings" title="Réglages">⚙️</button>
+  </div>
+</div>
+
+<div id="bottom" class="bar">
+  <button id="thumb" title="Dernière photo" disabled></button>
+  <button id="shutter" title="Prendre une photo" aria-label="Prendre une photo"></button>
+  <button id="flip" title="Changer de caméra">🔄</button>
+</div>
+
+<div id="review">
+  <img id="shot" alt="Photo prise">
+  <div class="actions">
+    <button id="save">💾 Enregistrer</button>
+    <button id="retake">↩︎ Reprendre</button>
+  </div>
+  <div id="hint"></div>
+</div>
+
+<div id="settings">
+  <div class="card">
+    <h2>Réglages</h2>
+    <label>Texte sur les photos (nom de l'événement…)
+      <input type="text" id="caption" maxlength="40" placeholder="Ex. : Halloween 2026">
+    </label>
+    <label class="row"><input type="checkbox" id="withDate" checked> Ajouter la date</label>
+    <label>Cadre
+      <div class="chips" id="frames">
+        <button data-c="none">Aucun</button>
+        <button data-c="#ffffff" class="on">Blanc</button>
+        <button data-c="#111111">Noir</button>
+        <button data-c="#ff3d6e">Rose</button>
+        <button data-c="#f39c12">Orange</button>
+      </div>
+    </label>
+    <button class="close" id="closeSettings">OK</button>
+  </div>
+</div>
+
+<div id="start">
+  <h1>📸 Photobooth</h1>
+  <p>Touchez le bouton pour activer la caméra.</p>
+  <button id="go">Commencer</button>
+  <p id="error"></p>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const video = $('#video');
+let stream = null;
+let facing = 'user';          // 'user' = caméra avant, 'environment' = arrière
+let filter = 'none';
+let mode = 'single';          // 'single' ou 'strip'
+let timerSec = 3;
+let busy = false;
+let lastBlob = null, lastUrl = null;
+
+// Réglages mémorisés sur l'appareil
+const settings = { caption: '', withDate: true, frame: '#ffffff' };
+try { Object.assign(settings, JSON.parse(localStorage.getItem('photobooth') || '{}')); } catch (e) {}
+function saveSettings() { try { localStorage.setItem('photobooth', JSON.stringify(settings)); } catch (e) {} }
+
+const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+              (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+async function startCamera() {
+  if (stream) stream.getTracks().forEach(t => t.stop());
+  stream = await navigator.mediaDevices.getUserMedia({
+    video: { facingMode: facing, width: { ideal: 1920 }, height: { ideal: 1080 } },
+    audio: false
+  });
+  video.srcObject = stream;
+  await video.play();
+  video.classList.toggle('mirror', facing === 'user');
+}
+
+$('#go').onclick = async () => {
+  $('#error').textContent = '';
+  if (!navigator.mediaDevices?.getUserMedia) {
+    $('#error').textContent = "Ce navigateur ne donne pas accès à la caméra. La page doit être ouverte en HTTPS (GitHub Pages) dans Safari ou Chrome.";
+    return;
+  }
+  try {
+    await startCamera();
+    $('#start').remove();
+    keepAwake();
+  } catch (e) {
+    $('#error').textContent = "Impossible d'accéder à la caméra : " + (e.message || e.name) +
+      ". Vérifiez l'autorisation caméra dans les réglages du navigateur.";
+  }
+};
+
+$('#flip').onclick = async () => {
+  facing = facing === 'user' ? 'environment' : 'user';
+  try { await startCamera(); } catch (e) { facing = facing === 'user' ? 'environment' : 'user'; }
+};
+
+function selectChip(group, btn) {
+  group.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === btn));
+}
+
+$('#filters').onclick = e => {
+  const b = e.target.closest('button'); if (!b) return;
+  filter = b.dataset.f;
+  selectChip($('#filters'), b);
+  video.className = (facing === 'user' ? 'mirror ' : '') + (filter !== 'none' ? 'f-' + filter : '');
+};
+
+$('#modes').onclick = e => {
+  const b = e.target.closest('button'); if (!b) return;
+  mode = b.dataset.m;
+  selectChip($('#modes'), b);
+};
+
+const timers = [0, 3, 5, 10];
+$('#timer').onclick = () => {
+  timerSec = timers[(timers.indexOf(timerSec) + 1) % timers.length];
+  $('#timer').textContent = timerSec ? `⏱ ${timerSec} s` : '⏱ off';
+};
+
+// --- Réglages ---
+$('#caption').value = settings.caption;
+$('#withDate').checked = settings.withDate;
+selectChip($('#frames'), $(`#frames button[data-c="${settings.frame}"]`));
+
+$('#openSettings').onclick = () => $('#settings').classList.add('open');
+$('#closeSettings').onclick = () => {
+  settings.caption = $('#caption').value.trim();
+  settings.withDate = $('#withDate').checked;
+  saveSettings();
+  $('#settings').classList.remove('open');
+};
+$('#frames').onclick = e => {
+  const b = e.target.closest('button'); if (!b) return;
+  settings.frame = b.dataset.c;
+  selectChip($('#frames'), b);
+};
+
+// --- Prise de vue ---
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+async function countdown(sec) {
+  const el = $('#countdown');
+  for (let i = sec; i > 0; i--) {
+    el.textContent = i;
+    el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
+    await sleep(1000);
+  }
+  el.textContent = '';
+}
+
+function flash() {
+  const f = $('#flash'); f.classList.remove('go'); void f.offsetWidth; f.classList.add('go');
+}
+
+// Les filtres sont appliqués pixel par pixel, car ctx.filter n'est pas fiable sur Safari.
+function applyFilter(ctx, w, h) {
+  if (filter === 'none') return;
+  const img = ctx.getImageData(0, 0, w, h), d = img.data;
+  for (let i = 0; i < d.length; i += 4) {
+    const r = d[i], g = d[i + 1], b = d[i + 2];
+    if (filter === 'bw') {
+      let v = 0.299 * r + 0.587 * g + 0.114 * b;
+      v = (v - 128) * 1.1 + 128;
+      d[i] = d[i + 1] = d[i + 2] = v;
+    } else if (filter === 'sepia') {
+      d[i]     = r * .393 + g * .769 + b * .189;
+      d[i + 1] = r * .349 + g * .686 + b * .168;
+      d[i + 2] = r * .272 + g * .534 + b * .131;
+    } else if (filter === 'warm') {
+      d[i]     = r * 1.12 + 8;
+      d[i + 1] = g * 1.03 + 4;
+      d[i + 2] = b * 0.88;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+}
+
+// Capture l'image de la caméra, recadrée au format demandé (largeur / hauteur).
+function grabFrame(aspect) {
+  const vw = video.videoWidth, vh = video.videoHeight;
+  let cw, ch;
+  if (vw / vh > aspect) { ch = vh; cw = Math.round(vh * aspect); }
+  else { cw = vw; ch = Math.round(vw / aspect); }
+  const sx = Math.round((vw - cw) / 2), sy = Math.round((vh - ch) / 2);
+
+  const canvas = document.createElement('canvas');
+  canvas.width = cw; canvas.height = ch;
+  const ctx = canvas.getContext('2d');
+  if (facing === 'user') { ctx.translate(cw, 0); ctx.scale(-1, 1); }
+  ctx.drawImage(video, sx, sy, cw, ch, 0, 0, cw, ch);
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  applyFilter(ctx, cw, ch);
+  return canvas;
+}
+
+function captionLines() {
+  const lines = [];
+  if (settings.caption) lines.push(settings.caption);
+  if (settings.withDate) lines.push(new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }));
+  return lines;
+}
+
+// Couleur de texte lisible sur la couleur du cadre
+function textColorOn(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  const lum = 0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255);
+  return lum > 150 ? '#111111' : '#ffffff';
+}
+
+function drawCaption(ctx, lines, cx, top, height, color, unit) {
+  if (!lines.length) return;
+  const big = Math.round(unit * 0.07), small = Math.round(unit * 0.045);
+  const sizes = lines.map((_, i) => (i === 0 && settings.caption) ? big : small);
+  const gap = unit * 0.015;
+  const total = sizes.reduce((a, b) => a + b, 0) + gap * (lines.length - 1);
+  let y = top + (height - total) / 2;
+  ctx.fillStyle = color;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  lines.forEach((line, i) => {
+    ctx.font = `${sizes[i] === big ? '700' : '500'} ${sizes[i]}px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`;
+    ctx.fillText(line, cx, y, unit * 0.92);
+    y += sizes[i] + gap;
+  });
+}
+
+// Une photo, avec cadre et texte éventuels
+function composeSingle(photo) {
+  const w = photo.width, h = photo.height, unit = Math.min(w, h);
+  const lines = captionLines();
+  const out = document.createElement('canvas');
+  const ctx = out.getContext('2d');
+
+  if (settings.frame === 'none') {
+    out.width = w; out.height = h;
+    ctx.drawImage(photo, 0, 0);
+    if (lines.length) {
+      const band = unit * (lines.length > 1 ? 0.2 : 0.14);
+      const grad = ctx.createLinearGradient(0, h - band * 1.4, 0, h);
+      grad.addColorStop(0, 'rgba(0,0,0,0)');
+      grad.addColorStop(1, 'rgba(0,0,0,.65)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, h - band * 1.4, w, band * 1.4);
+      drawCaption(ctx, lines, w / 2, h - band, band * 0.9, '#ffffff', unit);
+    }
+    return out;
+  }
+
+  const pad = Math.round(unit * 0.04);
+  const footer = lines.length ? Math.round(unit * (lines.length > 1 ? 0.2 : 0.14)) : pad;
+  out.width = w + pad * 2;
+  out.height = h + pad + footer;
+  ctx.fillStyle = settings.frame;
+  ctx.fillRect(0, 0, out.width, out.height);
+  ctx.drawImage(photo, pad, pad);
+  drawCaption(ctx, lines, out.width / 2, pad + h, footer, textColorOn(settings.frame), unit);
+  return out;
+}
+
+// Bande verticale de 4 photos (style photomaton)
+function composeStrip(photos) {
+  const w = photos[0].width, h = photos[0].height;
+  const unit = w;
+  const frame = settings.frame === 'none' ? '#ffffff' : settings.frame;
+  const lines = captionLines();
+  const pad = Math.round(w * 0.05);
+  const footer = lines.length ? Math.round(unit * (lines.length > 1 ? 0.24 : 0.17)) : pad;
+  const out = document.createElement('canvas');
+  out.width = w + pad * 2;
+  out.height = photos.length * h + (photos.length + 1) * pad - pad + footer;
+  const ctx = out.getContext('2d');
+  ctx.fillStyle = frame;
+  ctx.fillRect(0, 0, out.width, out.height);
+  photos.forEach((p, i) => ctx.drawImage(p, pad, pad + i * (h + pad)));
+  drawCaption(ctx, lines, out.width / 2, photos.length * (h + pad), footer, textColorOn(frame), unit);
+  return out;
+}
+
+// Réduit une photo à une largeur maximale (pour garder la bande à une taille raisonnable)
+function fitWidth(canvas, maxW) {
+  if (canvas.width <= maxW) return canvas;
+  const c = document.createElement('canvas');
+  c.width = maxW; c.height = Math.round(canvas.height * maxW / canvas.width);
+  c.getContext('2d').drawImage(canvas, 0, 0, c.width, c.height);
+  return c;
+}
+
+$('#shutter').onclick = async () => {
+  if (busy || !stream) return;
+  busy = true;
+  document.body.classList.add('busy');
+  const progress = $('#progress');
+  try {
+    let result;
+    if (mode === 'strip') {
+      const photos = [];
+      for (let i = 0; i < 4; i++) {
+        progress.textContent = `Photo ${i + 1} / 4`;
+        progress.classList.add('show');
+        await countdown(i === 0 ? (timerSec || 3) : 3);
+        flash();
+        photos.push(fitWidth(grabFrame(4 / 3), 1000));
+        await sleep(500);
+      }
+      progress.classList.remove('show');
+      result = composeStrip(photos);
+    } else {
+      if (timerSec) await countdown(timerSec);
+      flash();
+      result = composeSingle(grabFrame(window.innerWidth / window.innerHeight));
+    }
+    const blob = await new Promise(r => result.toBlob(r, 'image/jpeg', 0.92));
+    showReview(blob);
+  } finally {
+    progress.classList.remove('show');
+    document.body.classList.remove('busy');
+    busy = false;
+  }
+};
+
+function showReview(blob) {
+  lastBlob = blob;
+  if (lastUrl) URL.revokeObjectURL(lastUrl);
+  lastUrl = URL.createObjectURL(blob);
+  $('#shot').src = lastUrl;
+  $('#thumb').style.backgroundImage = `url(${lastUrl})`;
+  $('#thumb').disabled = false;
+  $('#hint').textContent = isIOS
+    ? "Sur iPad : touchez « Enregistrer » puis « Enregistrer l'image » pour l'ajouter à Photos."
+    : "Sur Android : la photo est enregistrée dans Téléchargements (visible dans la galerie).";
+  $('#review').classList.add('open');
+}
+
+$('#thumb').onclick = () => { if (lastBlob) $('#review').classList.add('open'); };
+$('#retake').onclick = () => $('#review').classList.remove('open');
+
+function fileName() {
+  const d = new Date(), p = n => String(n).padStart(2, '0');
+  return `photobooth-${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}.jpg`;
+}
+
+function download(blob, name) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+
+$('#save').onclick = async () => {
+  if (!lastBlob) return;
+  const name = fileName();
+  const file = new File([lastBlob], name, { type: 'image/jpeg' });
+  // iPad : la feuille de partage propose « Enregistrer l'image » → pellicule Photos.
+  // Android : téléchargement direct (dossier Téléchargements, visible dans la galerie).
+  if (isIOS && navigator.canShare?.({ files: [file] })) {
+    try {
+      await navigator.share({ files: [file] });
+      return;
+    } catch (e) {
+      if (e.name === 'AbortError') return;
+    }
+  }
+  download(lastBlob, name);
+};
+
+// Empêche l'écran de se mettre en veille pendant la soirée
+async function keepAwake() {
+  try {
+    let lock = await navigator.wakeLock?.request('screen');
+    document.addEventListener('visibilitychange', async () => {
+      if (document.visibilityState === 'visible') {
+        lock = await navigator.wakeLock?.request('screen');
+        if (stream && !stream.active) startCamera().catch(() => {});
+      }
+    });
+  } catch (e) {}
+}
+</script>
+</body>
+</html>
