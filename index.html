@@ -217,6 +217,12 @@ async function startCamera() {
   video.classList.toggle('mirror', facing === 'user');
 }
 
+async function launch() {
+  await startCamera();
+  $('#start')?.remove();
+  keepAwake();
+}
+
 $('#go').onclick = async () => {
   $('#error').textContent = '';
   if (!navigator.mediaDevices?.getUserMedia) {
@@ -224,14 +230,20 @@ $('#go').onclick = async () => {
     return;
   }
   try {
-    await startCamera();
-    $('#start').remove();
-    keepAwake();
+    await launch();
   } catch (e) {
     $('#error').textContent = "Impossible d'accéder à la caméra : " + (e.message || e.name) +
       ". Vérifiez l'autorisation caméra dans les réglages du navigateur.";
   }
 };
+
+// Si la caméra est déjà autorisée pour ce site, on saute l'écran d'accueil.
+(async () => {
+  try {
+    const perm = await navigator.permissions?.query({ name: 'camera' });
+    if (perm?.state === 'granted') await launch();
+  } catch (e) {}
+})();
 
 $('#flip').onclick = async () => {
   facing = facing === 'user' ? 'environment' : 'user';
