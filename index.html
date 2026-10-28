@@ -137,8 +137,8 @@
   </div>
   <div class="right">
     <div class="chips" id="modes">
-      <button data-m="single" class="on">1 photo</button>
-      <button data-m="strip">Bande ×4</button>
+      <button data-m="strip" class="on">3 photos</button>
+      <button data-m="single">1 photo</button>
     </div>
     <button id="timer" title="Minuteur">⏱ 3 s</button>
     <button id="openSettings" title="Réglages">⚙️</button>
@@ -193,7 +193,8 @@ const video = $('#video');
 let stream = null;
 let facing = 'user';          // 'user' = caméra avant, 'environment' = arrière
 let filter = 'none';
-let mode = 'single';          // 'single' ou 'strip'
+let mode = 'strip';           // 'single' ou 'strip'
+const SHOTS = 3;           // nombre de photos par séance
 let timerSec = 3;
 let busy = false;
 let lastBlob = null, lastUrl = null;
@@ -413,7 +414,7 @@ function composeSingle(photo) {
   return out;
 }
 
-// Bande verticale de 4 photos (style photomaton)
+// Bande verticale de 3 photos (style photomaton)
 function composeStrip(photos) {
   const w = photos[0].width, h = photos[0].height;
   const unit = w;
@@ -450,8 +451,8 @@ $('#shutter').onclick = async () => {
     let result;
     if (mode === 'strip') {
       const photos = [];
-      for (let i = 0; i < 4; i++) {
-        progress.textContent = `Photo ${i + 1} / 4`;
+      for (let i = 0; i < SHOTS; i++) {
+        progress.textContent = `Photo ${i + 1} / ${SHOTS}`;
         progress.classList.add('show');
         await countdown(i === 0 ? (timerSec || 3) : 3);
         flash();
