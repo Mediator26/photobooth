@@ -73,21 +73,26 @@
   .corner.bl { bottom: 28px; left: 28px; border-right: 0; border-top: 0; border-bottom-left-radius: 14px; }
   .corner.br { bottom: 28px; right: 28px; border-left: 0; border-top: 0; border-bottom-right-radius: 14px; }
 
-  /* ---------- Accueil ---------- */
-  .dock {
-    position: absolute; left: 50%; bottom: max(44px, env(safe-area-inset-bottom)); transform: translateX(-50%);
-    display: flex; align-items: center; gap: 32px; padding: 20px 44px 20px 20px; border-radius: 120px;
-    background: rgba(14,14,16,.62); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
-    border: 1px solid rgba(245,245,242,.12); width: max-content; max-width: calc(100vw - 32px); text-align: left;
+  /* ---------- Accueil : tout l'écran déclenche la séance ---------- */
+  #s-home { cursor: pointer; }
+  #s-home:focus-visible { outline: 4px solid var(--accent); outline-offset: -4px; }
+  .tap-hint {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center;
+    padding: 32px 40px; border-radius: 36px; max-width: calc(100vw - 32px);
+    background: rgba(14,14,16,.38); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(245,245,242,.12); opacity: .85; pointer-events: none;
   }
-  .dock:active { transform: translateX(-50%) scale(.98); }
+  #s-home:active .tap-hint { transform: translate(-50%, -50%) scale(.97); }
   .shutter {
-    width: 148px; height: 148px; border-radius: 50%; background: var(--accent);
+    width: 120px; height: 120px; border-radius: 50%; background: var(--accent);
     display: flex; align-items: center; justify-content: center; flex-shrink: 0;
     box-shadow: 0 0 0 10px rgba(245,245,242,.14), 0 16px 40px rgba(0,0,0,.35);
+    animation: breathe 2.4s ease-in-out infinite;
   }
-  .dock-title { font-family: var(--display); font-size: 44px; font-weight: 800; line-height: 1; letter-spacing: -.01em; }
-  .dock-sub { font-size: 19px; color: var(--soft); margin-top: 8px; }
+  @keyframes breathe { 50% { box-shadow: 0 0 0 18px rgba(245,245,242,.08), 0 16px 40px rgba(0,0,0,.35); } }
+  .dock-title { font-family: var(--display); font-size: 40px; font-weight: 800; line-height: 1.05; letter-spacing: -.01em; }
+  .dock-sub { font-size: 18px; color: var(--soft); }
 
   /* ---------- Compte à rebours ---------- */
   .tint { position: absolute; inset: 0; background: rgba(14,14,16,.28); }
@@ -218,6 +223,11 @@
   .result-stage { flex: 1; min-width: 0; display: flex; align-items: center; justify-content: center; padding: 32px; position: relative; }
   .montage-img { display: block; max-width: 100%; max-height: 100%; border-radius: 10px; box-shadow: 0 24px 60px rgba(0,0,0,.45); background: var(--paper); }
   .montage-img:not([src]) { display: none; }
+  .saved { display: flex; align-items: center; gap: 12px; min-height: 64px; padding: 0 18px; border-radius: 18px; background: var(--ctrl2); font-size: 17px; font-weight: 600; }
+  .saved-ico { width: 34px; height: 34px; border-radius: 50%; background: var(--ctrl); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .saved-ico svg { opacity: 0; }
+  .saved.done .saved-ico { background: var(--accent); }
+  .saved.done .saved-ico svg { opacity: 1; }
   .btn-secondary:disabled { opacity: .5; }
   .result-wait { position: absolute; font-size: 18px; color: var(--muted); }
   .result-title { font-family: var(--display); font-size: 64px; font-weight: 800; line-height: .95; letter-spacing: -.02em; margin: 0; }
@@ -300,8 +310,8 @@
     .stepper .lbl { display: none; }
     .topbar { padding-left: 16px; padding-right: 16px; }
     .topbar-right { min-width: 0; }
-    .dock { gap: 18px; padding: 14px 26px 14px 14px; }
-    .shutter { width: 96px; height: 96px; }
+    .tap-hint { padding: 24px; gap: 10px; }
+    .shutter { width: 88px; height: 88px; }
     .shutter svg { width: 40px; height: 40px; }
     .dock-title { font-size: 26px; }
     .dock-sub { font-size: 15px; }
@@ -329,7 +339,7 @@
 </section>
 
 <!-- 1 · Accueil -->
-<section id="s-home" class="screen">
+<section id="s-home" class="screen" role="button" tabindex="0" aria-label="Touchez l'écran pour commencer la séance photo">
   <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
   <div class="hud-top">
     <div class="pill"><span class="dot"></span><span>En direct</span></div>
@@ -344,15 +354,13 @@
       </button>
     </div>
   </div>
-  <button type="button" class="dock" id="startSession" aria-label="Commencer la séance photo">
+  <div class="tap-hint" aria-hidden="true">
     <span class="shutter">
-      <svg aria-hidden="true" width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="#141414" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/></svg>
+      <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="#141414" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/></svg>
     </span>
-    <span>
-      <span class="dock-title" style="display:block">Touchez pour commencer</span>
-      <span class="dock-sub" style="display:block" id="homeSub"></span>
-    </span>
-  </button>
+    <span class="dock-title">Touchez l'écran pour commencer</span>
+    <span class="dock-sub" id="homeSub"></span>
+  </div>
 </section>
 
 <!-- 2 · Compte à rebours -->
@@ -494,10 +502,11 @@
         <h2 class="result-title">Et voilà !</h2>
         <p class="result-sub" id="resultSub"></p>
       </div>
-      <button type="button" class="btn-primary" id="saveMontage" disabled>
-        <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#141414" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>
-        <span>Enregistrer le montage</span>
-      </button>
+      <div class="saved" id="saveStatus" role="status">
+        <span class="saved-ico" id="saveIco" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#141414" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>
+        <span id="saveTxt">Enregistrement…</span>
+      </div>
+      <button type="button" class="btn-secondary" id="saveMontage" hidden>Ajouter aussi à Photos</button>
       <button type="button" class="btn-secondary" id="savePhotos" disabled>Enregistrer les photos séparées</button>
       <p class="hint" id="saveHint"></p>
       <div class="spacer"></div>
@@ -554,7 +563,7 @@
       </div>
       <label class="srow"><span class="k">Afficher la date</span><input type="checkbox" class="switch" data-key="showDate"></label>
       <div class="srow"><span class="k">Gabarit du montage</span>
-        <div class="seg" data-key="layout" role="group" aria-label="Gabarit du montage"><button type="button" data-v="grille">Grille</button><button type="button" data-v="bande">Bande</button></div>
+        <div class="seg" data-key="layout" role="group" aria-label="Gabarit du montage"><button type="button" data-v="bande">Bande</button><button type="button" data-v="grille">Grille</button></div>
       </div>
       <div class="group">
         <div class="label">Aperçu du montage</div>
@@ -627,7 +636,7 @@ const BODY = '"DM Sans", system-ui, sans-serif';
 // ---------- Réglages (mémorisés sur l'appareil) ----------
 const DEFAULTS = {
   shots: 3, timer: 3, pause: 3, facing: 'user', mirror: true, retouch: true,
-  eventName: '', showDate: true, layout: 'grille', accent: '#FFD23F',
+  eventName: '', showDate: true, layout: 'bande', accent: '#FFD23F',
   editTimeout: 90, resultTimeout: 60, pin: ''
 };
 const S = Object.assign({}, DEFAULTS);
@@ -1054,7 +1063,14 @@ async function runSession() {
   if (S.retouch) openEdit(); else openResult();
 }
 
-$('#startSession').onclick = runSession;
+// Un appui n'importe où sur l'image lance la séance, sauf sur la roue des réglages
+$('#s-home').addEventListener('click', ev => {
+  if (ev.target.closest('#openSettings')) return;
+  runSession();
+});
+$('#s-home').addEventListener('keydown', ev => {
+  if (ev.target === ev.currentTarget && (ev.key === 'Enter' || ev.key === ' ')) { ev.preventDefault(); runSession(); }
+});
 $$('.cancel').forEach(b => b.onclick = () => {
   if (session) session.token.cancelled = true;
   session = null;
@@ -1336,11 +1352,11 @@ async function openResult() {
   const n = sess.n;
   $('#resultSub').textContent = n > 1 ? `Vos ${n} photos et le montage sont prêts.` : 'Votre photo est prête.';
   $('#savePhotos').hidden = n === 1;
-  $('#saveMontage').disabled = true;
+  $('#saveMontage').hidden = true;
   $('#savePhotos').disabled = true;
-  $('#saveHint').textContent = isIOS
-    ? "Touchez « Enregistrer », puis « Enregistrer l'image » pour l'ajouter à Photos."
-    : 'Les images sont enregistrées dans Téléchargements, visibles dans la galerie.';
+  $('#saveHint').textContent = '';
+  $('#saveStatus').classList.remove('done');
+  $('#saveTxt').textContent = 'Préparation du montage…';
   $('#montage').removeAttribute('src');
   $('#resultWait').hidden = false;
   montageBlob = null; photoFiles = null;
@@ -1353,7 +1369,18 @@ async function openResult() {
   montageUrl = URL.createObjectURL(blob);
   $('#montage').src = montageUrl;
   $('#resultWait').hidden = true;
-  $('#saveMontage').disabled = false;
+
+  // Enregistrement automatique du montage, sans action de l'invité
+  download(new File([blob], fileName('montage'), { type: 'image/jpeg' }));
+  $('#saveStatus').classList.add('done');
+  $('#saveTxt').textContent = isIOS
+    ? 'Montage enregistré dans Fichiers › Téléchargements'
+    : 'Montage enregistré sur l\'appareil';
+  $('#saveHint').textContent = isIOS
+    ? "Sur iPad, une page web ne peut pas écrire directement dans Photos : « Ajouter aussi à Photos » passe par le menu de partage."
+    : 'Retrouvez-le dans Téléchargements ou dans la galerie.';
+  $('#saveMontage').hidden = !isIOS;
+
   // Préparées à l'avance : iPad n'autorise le partage que juste après un toucher
   photoFiles = await renderSingles();
   if (session === sess) $('#savePhotos').disabled = false;
@@ -1385,8 +1412,7 @@ async function saveFiles(files) {
 
 $('#saveMontage').onclick = async () => {
   if (!montageBlob) return;
-  const r = await saveFiles([new File([montageBlob], fileName('montage'), { type: 'image/jpeg' })]);
-  if (r === 'downloaded') $('#saveHint').textContent = 'Montage enregistré dans Téléchargements.';
+  await saveFiles([new File([montageBlob], fileName('montage'), { type: 'image/jpeg' })]);
 };
 $('#savePhotos').onclick = async () => {
   if (!photoFiles) return;
